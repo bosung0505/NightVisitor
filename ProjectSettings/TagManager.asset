@@ -5,6 +5,7 @@ TagManager:
   serializedVersion: 3
   tags:
   - Chicken
+  - Fence
   layers:
   - Default
   - TransparentFX
@@ -12,9 +13,9 @@ TagManager:
   - 
   - Water
   - UI
-  - 
-  - 
-  - 
+  - IgnoreNavMesh
+  - NavFloor
+  - Fence
   - 
   - 
   - 
