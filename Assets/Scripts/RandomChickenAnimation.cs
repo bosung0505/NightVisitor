@@ -34,6 +34,11 @@ public class RandomChickenAnimation : MonoBehaviour
     [Tooltip("Maximum distance from the boundary center the chicken is allowed to wander")]
     public float maxRadius = 15f;
 
+    [Header("Obstacle Avoidance")]
+    [Tooltip("How far ahead the chicken looks for fences")]
+    public float obstacleCheckDistance = 2.0f;
+    public LayerMask obstacleLayerMask;
+
     private bool isWalkingState = false;
     private bool isFleeingState = false;
     private bool isPanicState = false;
@@ -110,6 +115,33 @@ public class RandomChickenAnimation : MonoBehaviour
             float currentRotSpeed = rotationSpeed;
             if (isFleeingState) currentRotSpeed *= 2f;
             if (isPanicState) currentRotSpeed *= 5f; // Thrashing around very fast
+
+            // -------------------------------------------------------------------
+            // [추가된 로직] 장애물(울타리) 회피: 앞으로 가는 길에 울타리가 있으면 반사각으로 목표 방향 변경
+            // -------------------------------------------------------------------
+            if (!isDead)
+            {
+                // default to everything mask if not set
+                int mask = obstacleLayerMask.value == 0 ? ~0 : obstacleLayerMask.value;
+                RaycastHit hit;
+                
+                // 닭의 약간 위(0.5f)에서 앞쪽으로 구(Sphere)를 쏘아서 체크
+                if (Physics.SphereCast(transform.position + Vector3.up * 0.5f, 0.3f, transform.forward, out hit, obstacleCheckDistance, mask))
+                {
+                    string hitName = hit.collider.gameObject.name.ToLower();
+                    if (hitName.Contains("fence") || hit.collider.CompareTag("Fence"))
+                    {
+                        Debug.DrawRay(hit.point, hit.normal, Color.blue, 0.5f);
+                        // 충돌한 표면(울타리)의 법선 백터(normal)를 기준으로 반사되는(팅겨나가는) 방향 계산
+                        Vector3 reflectDir = Vector3.Reflect(transform.forward, hit.normal);
+                        reflectDir.y = 0;
+                        if (reflectDir != Vector3.zero)
+                        {
+                            targetRotation = Quaternion.LookRotation(reflectDir.normalized);
+                        }
+                    }
+                }
+            }
 
             // Smoothly rotate towards the target rotation
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, currentRotSpeed * Time.deltaTime);

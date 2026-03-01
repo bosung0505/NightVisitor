@@ -20,6 +20,13 @@ public class RandomFoxAnimation : MonoBehaviour
     public float runSpeed = 4f;
     public float fleeSpeedMultiplier = 2.0f;
     public float escapeSpeedMultiplier = 1.5f;
+    [Tooltip("여우가 도망칠 때(Escape) 방향을 트는 회전 속도 (낮을수록 천천히, 부드럽게 돕니다)")]
+    public float escapeRotationSpeed = 3.0f;
+
+    [Header("Health & Damage")]
+    [Tooltip("여우의 최대 체력 (기본 2: 꼬리나 몸통 등 Normal 부위는 2방, 머리나 심장 등 Critical 부위는 데미지가 2배라 1방에 즉사)")]
+    public int maxHealth = 2;
+    private int currentHealth;
 
     [Header("Timers")]
     public float jumpDuration = 1.5f;
@@ -49,6 +56,9 @@ public class RandomFoxAnimation : MonoBehaviour
 
         if (animator == null)
             Debug.LogError("RandomFoxAnimation requires an Animator component!");
+
+        // 체력 초기화
+        currentHealth = maxHealth;
         
         // Disable rotation update by agent if we want manual rotation, but letting agent handle it is usually better for NavMesh.
         // We'll let the NavMeshAgent handle both position and rotation for smooth obstacle avoidance.
@@ -155,37 +165,34 @@ public class RandomFoxAnimation : MonoBehaviour
                 break;
                 
             case FoxState.Escape:
-                agent.speed = runSpeed * escapeSpeedMultiplier;
+            // 탈출 목적지는 유효한 내비메시 위로 설정되어 있음
+            agent.speed = runSpeed * escapeSpeedMultiplier;
+            agent.SetDestination(escapeDestination);
+
+            // [추가] 도망칠 때의 부드러운 회전 속도 조절
+            // agent.desiredVelocity는 내비메시가 가리키는 현재 '나아가야 할 방향'입니다.
+            if (agent.desiredVelocity.sqrMagnitude > 0.1f)
+            {
+                Quaternion targetRot = Quaternion.LookRotation(agent.desiredVelocity.normalized);
+                transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, Time.deltaTime * escapeRotationSpeed);
+            }
+
+            // 현재 목적지에 거의 다다랐다면(갈 수 있는 내비메시 끝에 도달했다면)
+            if (!agent.pathPending && agent.remainingDistance <= 1.0f)
+            {
+                // 닭장에서 더 멀어지는 바깥쪽 방향을 계산합니다.
+                Vector3 awayFromCenterDir = transform.forward; // 기본값은 그냥 앞으로
+                if (huntingZoneCenter != null)
+                {
+                    awayFromCenterDir = (transform.position - huntingZoneCenter.position).normalized;
+                    awayFromCenterDir.y = 0;
+                }
+                
+                // 다시 새로운 도망갈 곳(내비메시 위)을 찾아서 계속 뜁니다.
+                escapeDestination = GetRandomNavMeshLocation(transform.position + (awayFromCenterDir * 20f), 15f);
                 agent.SetDestination(escapeDestination);
-                
-                // When escaping, the destination is often far off the NavMesh (50m away).
-                // When the agent reaches the edge of the NavMesh, it will try to pathfind 
-                // and start spinning wildly. We need to disable its rotation and force it forward.
-                
-                // Calculate distance to the edge of the current calculated path
-                if (!agent.pathPending && agent.remainingDistance <= agent.stoppingDistance + 0.5f)
-                {
-                    // Turn off automatic rotation so it doesn't spin
-                    agent.updateRotation = false;
-                    
-                    // Manually keep it facing the escape direction and push it forward into the void
-                    Vector3 dir = (escapeDestination - transform.position).normalized;
-                    dir.y = 0;
-                    if (dir != Vector3.zero)
-                    {
-                        Quaternion lookRot = Quaternion.LookRotation(dir);
-                        transform.rotation = Quaternion.Slerp(transform.rotation, lookRot, Time.deltaTime * 5f);
-                    }
-                    
-                    // Force translate forward, ignoring NavMesh boundaries
-                    transform.Translate(Vector3.forward * (runSpeed * escapeSpeedMultiplier) * Time.deltaTime, Space.Self);
-                }
-                else
-                {
-                    // While still running properly on the NavMesh, let the agent handle everything
-                    agent.updateRotation = true;
-                }
-                break;
+            }
+            break;
         }
     }
 
@@ -208,6 +215,22 @@ public class RandomFoxAnimation : MonoBehaviour
             // Only log if it hits a fence, to avoid spamming the console with Terrain/Ground hits
             if (hitName.Contains("fence") || hit.collider.CompareTag("Fence")) 
             {
+                // [수정점] 여우가 현재 가고자 하는 방향(agent.desiredVelocity)과 
+                // 시선의 방향(transform.forward) 사이의 각도를 계산합니다.
+                // 닭을 물고 빙글빙글 돌 때는 시선과 이동 목적지가 심하게 어긋나므로 
+                // 이 각도가 너무 크면(예: 45도 이상) 옆에 있는 울타리라고 판단하고 점프를 무시합니다.
+                
+                Vector3 desiredDir = agent.desiredVelocity.normalized;
+                float angleToDestination = Vector3.Angle(transform.forward, desiredDir);
+                
+                // 에이전트가 아직 덜 돌았거나 목적지를 향해 똑바로 가고 있지 않을 때 잡다한 점프 방지 
+                // (경미한 회전은 허용하기 위해 45도 정도의 여유를 줍니다)
+                if (agent.velocity.magnitude > 0.1f && angleToDestination > 45f)
+                {
+                    Debug.Log($"Ignored Fence Jump. Angle too steep: {angleToDestination}");
+                    return;
+                }
+
                 Debug.Log("Fence Detected! Jumping. Hit: " + hit.collider.gameObject.name);
                 
                 // We are close to the fence. Transition to jump based on current state.
@@ -241,14 +264,24 @@ public class RandomFoxAnimation : MonoBehaviour
             catchChickenObj.SetActive(true);
         }
 
-        // Calculate escape direction (opposite of entry direction with slight randomness)
-        Vector3 reverseDir = -entryDirection;
+        // Calculate escape direction (무조건 닭장 중앙에서 바깥쪽으로 향하는 벡터)
+        Vector3 escapeDir = transform.forward; // fallback
+        if (huntingZoneCenter != null)
+        {
+            escapeDir = (transform.position - huntingZoneCenter.position).normalized;
+        }
+        else
+        {
+            escapeDir = -entryDirection; // fallback if no center
+        }
+
+        // 약간의 랜덤성을 더해 예측 불가능하게 만듦
         float randomAngle = Random.Range(-30f, 30f);
-        Vector3 escapeDir = Quaternion.Euler(0, randomAngle, 0) * reverseDir;
+        escapeDir = Quaternion.Euler(0, randomAngle, 0) * escapeDir;
         escapeDir.y = 0;
         
-        // Create an arbitrary far point in that direction for the agent to run towards
-        escapeDestination = transform.position + (escapeDir.normalized * 50f);
+        // 내비메시 위에서 도달 가능한 유효한 도망 목적지 찾기
+        escapeDestination = GetRandomNavMeshLocation(transform.position + (escapeDir.normalized * 20f), 10f);
 
         SetState(FoxState.Escape);
         
@@ -415,32 +448,66 @@ public class RandomFoxAnimation : MonoBehaviour
 
     public void FleeFrom(Vector3 dangerPosition)
     {
-        if (currentState == FoxState.Dead || currentState == FoxState.Catching) return;
+        // 만약 이미 죽었거나, 닭을 잡는 중이거나, 이미 맵 밖으로 탈출(Escape) 중이라면 무시합니다.
+        if (currentState == FoxState.Dead || currentState == FoxState.Catching || currentState == FoxState.Escape) return;
 
         StopAllCoroutines();
-        StartCoroutine(FleeRoutine(dangerPosition));
-    }
-
-    private IEnumerator FleeRoutine(Vector3 dangerPosition)
-    {
-        currentState = FoxState.Flee;
-
+        
+        // 놀라서 달아날 방향 반환 (총알이 떨어진 곳 반대 방향)
         Vector3 fleeDirection = (transform.position - dangerPosition).normalized;
+        if (fleeDirection == Vector3.zero) fleeDirection = -transform.forward;
         fleeDirection.y = 0; 
         
-        // Calculate a safe point far away to flee towards
-        Vector3 safeDestination = transform.position + (fleeDirection * 20f);
+        // 해당 뱡향 쪽으로 내비메시 위에서 도달 가능한 유효한 도망 목적지 찾기
+        escapeDestination = GetRandomNavMeshLocation(transform.position + (fleeDirection.normalized * 20f), 10f);
+
+        SetState(FoxState.Escape);
         
         if (agent.isActiveAndEnabled && agent.isOnNavMesh)
         {
-            agent.speed = runSpeed * fleeSpeedMultiplier;
-            agent.SetDestination(safeDestination);
+            agent.ResetPath();
         }
+        
+        // 닭을 물고 달아날 때와 동일하게 목적지로 뛰어가서 사라지도록 합니다.
+        StartCoroutine(EscapeAndDisappearRoutine());
+    }
 
-        animator.CrossFade("Fox_Run", 0.1f);
-        yield return new WaitForSeconds(fleeDuration);
+    public void TakeDamage(int damage, Vector3 hitPoint)
+    {
+        // 이미 죽었다면 데미지 무시
+        if (currentState == FoxState.Dead) return;
 
-        // After fleeing, go back to walk
-        SetState(FoxState.Walk);
+        currentHealth -= damage;
+        Debug.Log($"여우 피격! 부위별 데미지: {damage}, 남은 체력: {currentHealth}");
+
+        if (currentHealth <= 0)
+        {
+            // 체력이 다 달면 사망
+            StopAnimation();
+            animator.SetTrigger("Die");
+        }
+        else
+        {
+            // 생존했으면 도망가기 (이미 Escape 중이라면 FleeFrom 내부에서 알아서 무시됨)
+            FleeFrom(hitPoint);
+        }
+    }
+
+    // 주어진 위치(center) 근처 반경(radius) 내에서 항상 안전하고 도달 가능한 가장 가까운 NavMesh 좌표를 반환하는 함수
+    private Vector3 GetRandomNavMeshLocation(Vector3 center, float radius)
+    {
+        // 중심점에서 랜덤한 오프셋 생성
+        Vector3 randomDirection = Random.insideUnitSphere * radius;
+        randomDirection += center;
+        
+        NavMeshHit hit;
+        // 주어진 반경 내에서 가장 가까운 내비메시 위치 찾기
+        if (NavMesh.SamplePosition(randomDirection, out hit, radius, NavMesh.AllAreas))
+        {
+            return hit.position;
+        }
+        
+        // 도저히 찾을 수 없을 땐, 에러 방지를 위해 현재 위치 반환
+        return transform.position;
     }
 }

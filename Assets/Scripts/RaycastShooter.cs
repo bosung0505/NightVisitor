@@ -8,6 +8,12 @@ public class RaycastShooter : MonoBehaviour
     [Header("Impact Settings")]
     public float fleeRadius = 5f;
 
+    [Header("Recoil Settings (Realistic)")]
+    [Tooltip("총을 쏠 때 시점이 위로 올라가는 기본 반동 세기")]
+    public float recoilUp = 2f;
+    [Tooltip("총을 쏠 때 시점이 좌우로 튀는 무작위 반동 세기")]
+    public float recoilSide = 1f;
+
     void Start()
     {
         // Try getting camera from this object, otherwise find main camera
@@ -40,6 +46,13 @@ public class RaycastShooter : MonoBehaviour
             return;
         }
 
+        // --- 리얼한 반동 적용 ---
+        CameraController camController = mainCamera.GetComponent<CameraController>();
+        if (camController != null)
+        {
+            camController.AddRealisticRecoil(recoilUp, recoilSide);
+        }
+
         // Raycast from the center of the screen (0.5, 0.5 viewport)
         Ray ray = mainCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
         RaycastHit hit;
@@ -50,7 +63,7 @@ public class RaycastShooter : MonoBehaviour
             // Debug line for visual confirmation in Scene view
             Debug.DrawLine(ray.origin, hit.point, Color.red, 2f);
 
-            // Play blood splatter effect
+            // play blood splatter effect
             if (bloodSplatter != null)
             {
                 bloodSplatter.transform.position = hit.point;
@@ -58,37 +71,50 @@ public class RaycastShooter : MonoBehaviour
                 bloodSplatter.Play();
             }
 
-            // Check if the hit object has an Animator component
-            Animator animator = hit.collider.GetComponent<Animator>();
+            // === [신규 로직] 부위별 타격 판정 (히트박스) ===
+            Hitbox hitbox = hit.collider.GetComponent<Hitbox>();
+            if (hitbox == null) hitbox = hit.collider.GetComponentInParent<Hitbox>(); // 부모나 조상 탐색
 
-            // If not on the object itself, try finding it on parents or children
-            if (animator == null)
+            if (hitbox != null)
             {
-                animator = hit.collider.GetComponentInParent<Animator>();
-            }
-
-            if (animator != null)
-            {
-                // Stop the random behavior script if it exists
-                RandomChickenAnimation chickenAnim = animator.GetComponent<RandomChickenAnimation>();
-                if (chickenAnim != null)
-                {
-                    chickenAnim.StopAnimation();
-                }
-
-                RandomFoxAnimation foxAnim = animator.GetComponent<RandomFoxAnimation>();
-                if (foxAnim != null)
-                {
-                    foxAnim.StopAnimation();
-                }
-
-                // Trigger the "Die" parameter
-                animator.SetTrigger("Die");
-                Debug.Log("Hit " + hit.collider.name + " and triggered Die animation.");
+                // 히트박스가 부착된 경우 (예: 세팅된 여우) -> 정확히 1의 기본 데미지(부위별 증폭됨)를 전달
+                hitbox.TakeDamage(1, hit.point);
+                Debug.Log($"Hit Hitbox on {hit.collider.name}");
             }
             else
             {
-                Debug.Log("Hit " + hit.collider.name + " but no Animator found.");
+                // === [기존 로직] 히트박스가 없는 경우 (예: 기존 닭 시스템 유지, 세팅 안된 적) ===
+                Animator animator = hit.collider.GetComponent<Animator>();
+
+                // If not on the object itself, try finding it on parents or children
+                if (animator == null)
+                {
+                    animator = hit.collider.GetComponentInParent<Animator>();
+                }
+
+                if (animator != null)
+                {
+                    // Stop the random behavior script if it exists
+                    RandomChickenAnimation chickenAnim = animator.GetComponent<RandomChickenAnimation>();
+                    if (chickenAnim != null)
+                    {
+                        chickenAnim.StopAnimation();
+                    }
+
+                    RandomFoxAnimation foxAnim = animator.GetComponent<RandomFoxAnimation>();
+                    if (foxAnim != null)
+                    {
+                        foxAnim.StopAnimation();
+                    }
+
+                    // Trigger the "Die" parameter
+                    animator.SetTrigger("Die");
+                    Debug.Log("Hit " + hit.collider.name + " and triggered Die animation.");
+                }
+                else
+                {
+                    Debug.Log("Hit " + hit.collider.name + " but no Animator found.");
+                }
             }
 
             // --- FLEE BEHAVIOR (Area of Effect) ---
