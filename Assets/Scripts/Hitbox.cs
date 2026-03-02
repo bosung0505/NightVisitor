@@ -26,7 +26,15 @@ public class Hitbox : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("Hitbox: 부모에서 RandomFoxAnimation 스크립트를 찾을 수 없습니다! 구조를 확인해주세요.");
+            DecoyFoxAI decoyFox = GetComponentInParent<DecoyFoxAI>();
+            if (decoyFox != null)
+            {
+                decoyFox.TakeDamage(finalDamage, hitPoint);
+            }
+            else
+            {
+                Debug.LogWarning("Hitbox: 부모에서 RandomFoxAnimation 혹은 DecoyFoxAI 스크립트를 찾을 수 없습니다! 구조를 확인해주세요.");
+            }
         }
     }
 }

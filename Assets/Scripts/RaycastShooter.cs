@@ -1,9 +1,34 @@
 using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+using System.Collections;
 
 public class RaycastShooter : MonoBehaviour
 {
     private Camera mainCamera;
     private ParticleSystem bloodSplatter;
+
+    [Header("Ammo & Reload Settings")]
+    public int maxAmmoPerMag = 5;
+    [Tooltip("총 예비 탄약량 (시작할 때 주어지는 탄약 총량)")]
+    public int maxReloadableAmmo = 30;
+    private int currentAmmo;
+    private int currentReloadableAmmo;
+    private bool isReloading = false;
+
+    [Header("Audio Settings")]
+    [Tooltip("격발 사운드")]
+    public AudioClip shootSound;
+    [Tooltip("재장전 사운드")]
+    public AudioClip reloadSound;
+    [Tooltip("빈 총깍지 소리 (선택사항)")]
+    public AudioClip emptyClickSound;
+    private AudioSource audioSource;
+
+    [Header("UI References")]
+    public TextMeshProUGUI currentAmmoText;
+    public TextMeshProUGUI reloadableAmmoText;
+    public Button reloadButton;
 
     [Header("Impact Settings")]
     public float fleeRadius = 5f;
@@ -27,6 +52,25 @@ public class RaycastShooter : MonoBehaviour
         {
             bloodSplatter = splatterObj.GetComponent<ParticleSystem>();
         }
+
+        // --- 탄약 초기화 및 UI 바인딩 ---
+        currentAmmo = maxAmmoPerMag;
+        currentReloadableAmmo = maxReloadableAmmo;
+
+        if (reloadButton != null)
+        {
+            // 인스펙터에 연결하지 않아도 스크립트 상에서 클릭 이벤트 바인딩
+            reloadButton.onClick.AddListener(TryReload);
+        }
+        UpdateAmmoUI();
+
+        // AudioSource 컴포넌트 가져오기 (없으면 자동 생성)
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+            audioSource.playOnAwake = false; // 자동 재생 방지
+        }
     }
 
     void Update()
@@ -34,12 +78,40 @@ public class RaycastShooter : MonoBehaviour
         // Left mouse button (index 0)
         if (Input.GetMouseButtonDown(0))
         {
+            // UI 요소 (장전 버튼 등) 위에 마우스가 있을 때는 격발 무시
+            // 단, 터치 패널이나 레이캐스트 타겟팅이 넓게 잡힌 투명 패널(예: Canvas 껍데기)이 
+            // 마우스 입력을 먹어버리는 버그가 흔히 발생합니다.
+            if (UnityEngine.EventSystems.EventSystem.current != null && 
+                UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
+            {
+                return;
+            }
+
             Shoot();
         }
     }
 
     private void Shoot()
     {
+        // 장전 중이거나 총알이 없으면 쏠 수 없음 (빈 총소리 재생)
+        if (isReloading || currentAmmo <= 0)
+        {
+            // 빈 총깍지 소리 재생
+            if (emptyClickSound != null && audioSource != null)
+                audioSource.PlayOneShot(emptyClickSound);
+            return;
+        }
+
+        // --- 사운드 재생 ---
+        if (shootSound != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(shootSound);
+        }
+
+        // 격발 시 총알 감소 및 UI 갱신
+        currentAmmo--;
+        UpdateAmmoUI();
+
         if (mainCamera == null)
         {
             Debug.LogError("No Camera found to shoot from!");
@@ -107,6 +179,13 @@ public class RaycastShooter : MonoBehaviour
                         foxAnim.StopAnimation();
                     }
 
+                    // 교란용 여우 정지
+                    DecoyFoxAI decoyAnim = animator.GetComponent<DecoyFoxAI>();
+                    if (decoyAnim != null)
+                    {
+                        decoyAnim.StopAnimation();
+                    }
+
                     // Trigger the "Die" parameter
                     animator.SetTrigger("Die");
                     Debug.Log("Hit " + hit.collider.name + " and triggered Die animation.");
@@ -141,7 +220,69 @@ public class RaycastShooter : MonoBehaviour
                 {
                     fox.FleeFrom(hit.point);
                 }
+
+                // Try to find decoy fox animation
+                DecoyFoxAI decoyFox = nearby.GetComponent<DecoyFoxAI>();
+                if (decoyFox == null) decoyFox = nearby.GetComponentInParent<DecoyFoxAI>();
+
+                if (decoyFox != null)
+                {
+                    decoyFox.FleeFrom(hit.point);
+                }
             }
+        }
+    }
+
+    // === [신규 로직] 장전 시스템 ===
+    public void TryReload()
+    {
+        // 이미 장전 중이거나, 장전할 예비 탄약이 없거나, 이미 탄창이 꽉 차있으면 액션 무시
+        if (isReloading || currentReloadableAmmo <= 0 || currentAmmo >= maxAmmoPerMag)
+            return;
+
+        StartCoroutine(ReloadCoroutine());
+    }
+
+    private IEnumerator ReloadCoroutine()
+    {
+        isReloading = true;
+        
+        // 장전 도중 버튼 연타 방지를 위해 일시 비활성화
+        if (reloadButton != null)
+            reloadButton.interactable = false;
+
+        // 재장전 사운드 재생
+        if (reloadSound != null && audioSource != null)
+        {
+            audioSource.PlayOneShot(reloadSound);
+        }
+
+        // 3.1초 대기
+        yield return new WaitForSeconds(3.1f);
+
+        int ammoNeeded = maxAmmoPerMag - currentAmmo;
+        int ammoToReload = Mathf.Min(ammoNeeded, currentReloadableAmmo);
+
+        currentAmmo += ammoToReload;
+        currentReloadableAmmo -= ammoToReload;
+
+        isReloading = false;
+        UpdateAmmoUI();
+    }
+
+    private void UpdateAmmoUI()
+    {
+        if (currentAmmoText != null)
+            currentAmmoText.text = currentAmmo.ToString();
+
+        if (reloadableAmmoText != null)
+            reloadableAmmoText.text = currentReloadableAmmo.ToString();
+
+        if (reloadButton != null)
+        {
+            // 요구사항: 예비 탄력이 0 이하면 버튼 비활성화
+            // (또한 장전 중일 때도 클릭되지 않게 방지)
+            reloadButton.interactable = (currentReloadableAmmo > 0 && !isReloading && currentAmmo < maxAmmoPerMag);
         }
     }
 }
