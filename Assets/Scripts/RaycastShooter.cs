@@ -75,12 +75,12 @@ public class RaycastShooter : MonoBehaviour
 
     void Update()
     {
-        // Left mouse button (index 0)
-        if (Input.GetMouseButtonDown(0))
+        // PC 환경을 위한 마우스 사격 유지 (터치 중일 때는 동작 안함)
+        // 안드로이드에서는 빈 화면 터치가 기본적으로 마우스 좌클릭(GetMouseButtonDown(0))으로
+        // 함께 인식되기 때문에, touchCount == 0 조건을 넣어 화면 회전 중 오발사를 막음.
+        if (Input.touchCount == 0 && Input.GetMouseButtonDown(0))
         {
-            // UI 요소 (장전 버튼 등) 위에 마우스가 있을 때는 격발 무시
-            // 단, 터치 패널이나 레이캐스트 타겟팅이 넓게 잡힌 투명 패널(예: Canvas 껍데기)이 
-            // 마우스 입력을 먹어버리는 버그가 흔히 발생합니다.
+            // UI를 클릭했을 때는 격발 무시
             if (UnityEngine.EventSystems.EventSystem.current != null && 
                 UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
             {
@@ -91,7 +91,7 @@ public class RaycastShooter : MonoBehaviour
         }
     }
 
-    private void Shoot()
+    public void Shoot()
     {
         // 장전 중이거나 총알이 없으면 쏠 수 없음 (빈 총소리 재생)
         if (isReloading || currentAmmo <= 0)
@@ -189,6 +189,12 @@ public class RaycastShooter : MonoBehaviour
                     // Trigger the "Die" parameter
                     animator.SetTrigger("Die");
                     Debug.Log("Hit " + hit.collider.name + " and triggered Die animation.");
+                    
+                    // --- [신규 로직] 우측 상단 킬 정보 UI 갱신 (히트박스가 없는 동물을 쐈을 때) ---
+                    if (KillCountManager.Instance != null && (foxAnim != null || decoyAnim != null))
+                    {
+                        KillCountManager.Instance.AddKill();
+                    }
                 }
                 else
                 {

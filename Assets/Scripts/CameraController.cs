@@ -4,10 +4,11 @@ public class CameraController : MonoBehaviour
 {
     [Header("Pan Settings")]
     public float panSpeed = 20f;
+    public float touchPanSpeed = 5f; // 모바일 터치 드래그 속도
     public bool useWorldSpace = false;
 
-    private Vector3 lastMousePos;
     private bool isPanning = false;
+    private int activeTouchId = -1; // 모바일 드래그 중인 손가락 ID 추적용
 
     // Variables to track cumulative rotation
     private float pitch = 0f;
@@ -57,32 +58,73 @@ public class CameraController : MonoBehaviour
         float breathPitch = Mathf.Sin(breathTimer) * breathAmount;
         float breathYaw = Mathf.Cos(breathTimer * 0.5f) * (breathAmount * 0.5f);
 
-        // Right mouse button (index 1)
-        if (Input.GetMouseButtonDown(1))
+        bool handledByTouch = false;
+
+        // --- 1. 모바일 환경: 터치 및 드래그 화면 회전 ---
+        if (Input.touchCount > 0)
         {
-            isPanning = true;
+            Touch touch = Input.GetTouch(0);
+
+            if (touch.phase == TouchPhase.Began)
+            {
+                // UI (버튼 등)를 터치한 것이 아니라, 빈 화면을 터치했을 때만 회전 시작
+                if (UnityEngine.EventSystems.EventSystem.current != null && 
+                    !UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject(touch.fingerId))
+                {
+                    isPanning = true;
+                    activeTouchId = touch.fingerId;
+                }
+            }
+            else if ((touch.phase == TouchPhase.Moved || touch.phase == TouchPhase.Stationary) && isPanning && touch.fingerId == activeTouchId)
+            {
+                handledByTouch = true;
+                
+                // 터치 이동량(deltaPosition)에 따라 회전
+                float moveX = touch.deltaPosition.x * touchPanSpeed * Time.deltaTime;
+                float moveY = touch.deltaPosition.y * touchPanSpeed * Time.deltaTime;
+
+                yaw += moveX;
+                pitch -= moveY;
+
+                pitch = Mathf.Clamp(pitch, -70f, 70f);
+                yaw = Mathf.Clamp(yaw, -80f, 80f);
+            }
+            else if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
+            {
+                if (touch.fingerId == activeTouchId)
+                {
+                    isPanning = false;
+                    activeTouchId = -1;
+                }
+            }
         }
 
-        if (Input.GetMouseButtonUp(1))
+        // --- 2. PC 환경: 마우스 우클릭 화면 회전 유지 (터치가 없을 때만 작동) ---
+        if (!handledByTouch && Input.touchCount == 0)
         {
-            isPanning = false;
-        }
+            if (Input.GetMouseButtonDown(1))
+            {
+                isPanning = true;
+            }
+            else if (Input.GetMouseButtonUp(1))
+            {
+                isPanning = false;
+            }
 
-        if (isPanning && Input.GetMouseButton(1))
-        {
-            float mouseX = Input.GetAxis("Mouse X") * panSpeed * Time.deltaTime;
-            float mouseY = Input.GetAxis("Mouse Y") * panSpeed * Time.deltaTime;
+            if (isPanning && Input.GetMouseButton(1))
+            {
+                float mouseX = Input.GetAxis("Mouse X") * panSpeed * Time.deltaTime;
+                float mouseY = Input.GetAxis("Mouse Y") * panSpeed * Time.deltaTime;
 
-            // Update pitch and yaw based on mouse input
-            yaw += mouseX;
-            pitch -= mouseY;
+                yaw += mouseX;
+                pitch -= mouseY;
 
-            // Clamp rotations
-            pitch = Mathf.Clamp(pitch, -70f, 70f);
-            yaw = Mathf.Clamp(yaw, -80f, 80f);
+                pitch = Mathf.Clamp(pitch, -70f, 70f);
+                yaw = Mathf.Clamp(yaw, -80f, 80f);
+            }
         }
         
-        // 마우스로 조작한 기본 회전(pitch, yaw) + 부드러운 반동 오프셋 + 숨쉬기 오프셋을 더해서 최종 각도 적용
+        // 최종 각도 적용 (마우스/터치 회전 + 반동 + 숨쉬기 반영)
         transform.eulerAngles = new Vector3(pitch + currentRecoilOffset.x + breathPitch, yaw + currentRecoilOffset.y + breathYaw, currentRecoilOffset.z);
     }
 

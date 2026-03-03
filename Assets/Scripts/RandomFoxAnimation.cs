@@ -485,6 +485,12 @@ public class RandomFoxAnimation : MonoBehaviour
             // 체력이 다 달면 사망
             StopAnimation();
             animator.SetTrigger("Die");
+            
+            // --- [신규 로직] 우측 상단 킬 정보 UI 갱신 ---
+            if (KillCountManager.Instance != null)
+            {
+                KillCountManager.Instance.AddKill();
+            }
         }
         else
         {
