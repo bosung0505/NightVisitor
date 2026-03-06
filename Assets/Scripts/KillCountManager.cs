@@ -1,5 +1,7 @@
 using UnityEngine;
 using TMPro; // TextMeshPro를 위한 네임스페이스
+using UnityEngine.UI;
+using DG.Tweening; // DOTween을 위한 네임스페이스
 using System.Collections;
 
 public class KillCountManager : MonoBehaviour
@@ -11,14 +13,32 @@ public class KillCountManager : MonoBehaviour
     [Tooltip("Canvas/InGame_Panel/Mission 안의 'Kill_Info' 게임오브젝트를 할당하세요")]
     public GameObject killInfoPanel;
     
-    [Tooltip("킬 수가 표시될 TextMeshProUGUI 컴포넌트 (Text_KillCount)")]
+    [Tooltip("킬 추가 시 화면 중앙에 잠깐 뜨는 TextMeshProUGUI 컴포넌트 (Text_KillCount)")]
     public TextMeshProUGUI killCountText;
+
+    [Header("Mission UI References")]
+    [Tooltip("InGame_Panel -> Mission_Opened -> Stage_Mission 에 있는 CurrentKillCount_Text")]
+    public TextMeshProUGUI currentKillCountText;
+
+    [Tooltip("미션 달성 시 나타날 StageClear 버튼 게임 오브젝트")]
+    public GameObject stageClearButtonObj;
+
+    [Tooltip("StageClear 버튼을 눌렀을 때 등장할 MissionClear_Panel (CanvasGroup 추천)")]
+    public CanvasGroup missionClearPanel;
+
+    [Tooltip("MissionClear_Panel 내부의 돌아가기 버튼")]
+    public Button backToStageButton;
 
     [Header("Settings")]
     [Tooltip("Kill_Info UI가 켜져 있는 시간 (초)")]
     public float displayDuration = 1.5f;
+    
+    [Tooltip("미션 클리어 패널이 등장하는 데 걸리는 시간")]
+    public float panelFadeDuration = 0.5f;
 
     private int currentKills = 0;
+    private int targetKills = 0; // 이번 스테이지의 목표 킬 수
+    private bool isCleared = false; // 클리어 여부 플래그
     private Coroutine hideCoroutine; // 현재 진행중인 숨김 코루틴
 
     private void Awake()
@@ -28,7 +48,7 @@ public class KillCountManager : MonoBehaviour
         {
             Instance = this;
         }
-        else
+        else if (Instance != this)
         {
             Destroy(gameObject);
         }
@@ -43,9 +63,60 @@ public class KillCountManager : MonoBehaviour
         }
         
         // 텍스트 초기화
-        if (killCountText != null)
+        if (killCountText != null) killCountText.text = currentKills.ToString();
+        if (currentKillCountText != null) currentKillCountText.text = currentKills.ToString();
+
+        // 클리어 관련 UI 숨기기
+        if (stageClearButtonObj != null) stageClearButtonObj.SetActive(false);
+        
+        if (missionClearPanel != null)
         {
-            killCountText.text = currentKills.ToString();
+            missionClearPanel.alpha = 0f;
+            missionClearPanel.gameObject.SetActive(false);
+        }
+
+        // 돌아가기 버튼 이벤트 연결
+        if (backToStageButton != null)
+        {
+            backToStageButton.onClick.AddListener(OnBackToStageClicked);
+        }
+
+        // 로비에 있는 StageSelectManager 에서 OnPlayStageClicked 할 때 InitMission()을 호출해줄 예정
+    }
+
+    /// <summary>
+    /// 스테이지 시작 시 목표 킬 수를 설정하고 초기화하는 함수
+    /// StageSelectManager에서 씬 넘어가기 전후로 호출해 줍니다.
+    /// </summary>
+    public void InitMission(int target)
+    {
+        currentKills = 0;
+        targetKills = target;
+        isCleared = false;
+
+        if (killCountText != null) killCountText.text = currentKills.ToString();
+        if (currentKillCountText != null) currentKillCountText.text = currentKills.ToString();
+
+        if (stageClearButtonObj != null) stageClearButtonObj.SetActive(false);
+        if (missionClearPanel != null)
+        {
+            missionClearPanel.alpha = 0f;
+            missionClearPanel.gameObject.SetActive(false);
+        }
+
+        // TimeScale 복구 (스테이지 재시작용)
+        Time.timeScale = 1f;
+
+        // StageClear 버튼 자체에 이벤트가 미리 연결안되어 있다면 여기서 연결
+        Button btn = stageClearButtonObj != null ? stageClearButtonObj.GetComponent<Button>() : null;
+        if (btn != null)
+        {
+            btn.onClick.RemoveAllListeners();
+            btn.onClick.AddListener(ShowMissionClearPanel);
+        }
+        else if (stageClearButtonObj != null)
+        {
+            Debug.LogError("[KillCountManager] stageClearButtonObj 로 연결된 게임 오브젝트에 Button 컴포넌트가 없습니다!");
         }
     }
 
@@ -54,13 +125,24 @@ public class KillCountManager : MonoBehaviour
     /// </summary>
     public void AddKill()
     {
-        currentKills++; // 킬 카운트 1 증가
-        Debug.Log($"[KillCountManager] AddKill() called! Current kills: {currentKills}");
+        // 이미 깼으면 추가 처리는 안해도 되거나 카운트만 계속 올려도 무방
+        // 여기서는 카운트를 계속 올리게 설정
+        currentKills++; 
+        Debug.Log($"[KillCountManager] AddKill() called! Current kills: {currentKills} / Target: {targetKills}");
 
         // UI 텍스트 업데이트
-        if (killCountText != null)
+        if (killCountText != null) killCountText.text = currentKills.ToString();
+        if (currentKillCountText != null) currentKillCountText.text = currentKills.ToString();
+
+        // 클리어 체크
+        if (!isCleared && currentKills >= targetKills)
         {
-            killCountText.text = currentKills.ToString();
+            isCleared = true;
+            OnMissionCleared();
+        }
+        else if (isCleared)
+        {
+            Debug.Log("[KillCountManager] Already cleared the mission.");
         }
 
         // UI 켜기 및 예약된 끄기 코루틴 실행
@@ -89,5 +171,74 @@ public class KillCountManager : MonoBehaviour
         }
         
         hideCoroutine = null;
+    }
+
+    private void OnMissionCleared()
+    {
+        Debug.Log("Mission Cleared! Activating StageClear Button.");
+        // 클리어 버튼 활성화
+        if (stageClearButtonObj != null)
+        {
+            // 만약 부모 객체가 꺼져있다면 버튼을 켜도 보이지 않으므로 부모도 확인
+            if (stageClearButtonObj.transform.parent != null && !stageClearButtonObj.transform.parent.gameObject.activeInHierarchy)
+            {
+                Debug.LogWarning("[KillCountManager] StageClear_BT 의 부모 오브젝트가 꺼져있어서 버튼이 화면에 안 보일 수 있습니다!");
+                stageClearButtonObj.transform.parent.gameObject.SetActive(true);
+            }
+            stageClearButtonObj.SetActive(true);
+        }
+        else
+        {
+            Debug.LogError("[KillCountManager] stageClearButtonObj 랑 연결된 버튼이 없습니다! 인스펙터를 확인해주세요.");
+        }
+    }
+
+    public void ShowMissionClearPanel()
+    {
+        Debug.Log("[KillCountManager] ShowMissionClearPanel() Triggered!");
+        
+        // 미션 클리어 시 인게임 진행(적 움직임, 탄약, 시간 등)을 모두 정지합니다.
+        Time.timeScale = 0f;
+
+        if (missionClearPanel != null)
+        {
+            missionClearPanel.gameObject.SetActive(true);
+            missionClearPanel.DOFade(1f, panelFadeDuration).SetUpdate(true).OnComplete(() => 
+            {
+                missionClearPanel.interactable = true;
+                missionClearPanel.blocksRaycasts = true;
+            });
+        }
+        else
+        {
+            Debug.LogError("[KillCountManager] missionClearPanel 이 할당되지 않았습니다!");
+        }
+    }
+
+    private void OnBackToStageClicked()
+    {
+        Debug.Log("[KillCountManager] Returning to Map. Hiding Mission Clear Panel.");
+        
+        // 미션 클리어 패널을 다시 숨깁니다.
+        if (missionClearPanel != null)
+        {
+            missionClearPanel.interactable = false;
+            missionClearPanel.blocksRaycasts = false;
+            missionClearPanel.DOFade(0f, panelFadeDuration).SetUpdate(true).OnComplete(() =>
+            {
+                missionClearPanel.gameObject.SetActive(false);
+            });
+        }
+
+        // 맵으로 돌아갑니다. StageSelectManager의 인스턴스를 찾아서 복귀 로직을 수행합니다.
+        StageSelectManager ssm = FindObjectOfType<StageSelectManager>();
+        if (ssm != null)
+        {
+            ssm.ReturnToMap();
+        }
+        else
+        {
+            Debug.LogError("StageSelectManager를 찾을 수 없습니다.");
+        }
     }
 }

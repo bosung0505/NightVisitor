@@ -49,6 +49,16 @@ AI 보조 개발자가 프로젝트 진행 상황을 빠르게 파악하고 맥�
 * **순찰 (Patrol):** 시작 시 가장 가까운 빈 오브젝트(`Waypoint`)를 찾아 이동한 후, 지정된 배열 순서대로 무한히 맵의 테두리를 순찰합니다.
 * **상호작용:** 기존 사냥용 여우와 마찬가지로 울타리를 마주치면 뛰어넘으며(`Raycast Jump`), 옆구리를 맞거나 근처에서 총소리가 나면 기겁하고 반대편으로 도망쳐(`Flee/Escape`) 10초 뒤에 맵에서 사라집니다. (기존 여우용 Hitbox 및 Raycast 스크립트와 100% 호환)
 
+## 8. 게임 초기화 및 스테이지 관리 시스템 (`StageSelectManager.cs` & `GunSelectManager.cs`)
+* **스테이지 개별 설정 (Stage Configs):** 각 스테이지마다 목표 방어 성공 횟수(`targetKillCount`), 여우 스폰 간격(`foxSpawnInterval`), 고유한 스폰 위치 배열(`spawnPoints`)을 `StageConfig` 구조체로 다르게 적용할 수 있습니다.
+* **완전한 씬 초기화 (Complete Game State Reset):** `SceneManager`를 통한 통째 로딩 없이 오브젝트들을 청소/복원하여 새 게임 환경을 구축합니다.
+    * **백업 및 복원:** `Start()` 시점에서 씬의 모든 `Chicken`과 `DecoyFoxAI`의 원래 위치/회전/부모 계층을 프리팹(`PrefabRef`)으로 몰래 복사해둡니다. (비활성화된 오브젝트 포함)
+    * **청소:** 새로운 스테이지 시작 시 이전 판에 남아있던 시체, 도망가던 여우, 위치를 이탈한 닭과 디코이 여우들을 모두 찾아 파괴(`Destroy`)합니다.
+    * **리스폰 및 장전:** 보관해둔 프리팹에서 깨끗한 닭과 미끼 여우들을 원래 자리에 똑같이 재생산하고, `RaycastShooter`의 탄약(`currentAmmo`, `reloadableAmmo`)과 `BatteryController`의 타이머를 100% 상태로 되돌립니다.
+* **시간 정지 및 볼륨 제어:** 
+    * 미션 클리어 패널이 활성화될 때 및 총기 선택(카운트다운) 창이 뜰 때는 `Time.timeScale = 0f`를 적용하여 게임 내 시간, 애니메이션, 사격 이벤트를 모두 "얼음" 상태로 만듭니다.
+    * 다음 스테이지 버튼을 누르자마자 즉시 열화상 볼륨(`volumeStart.weight = 1f`)을 덮어씌워(`PrepareGunSelection`) 화면 색감이 번쩍이는 전환 글리치를 방지합니다.
+
 ---
 **[다음에 AI를 부르실 때 사용할 프롬프트 예시]**
 "Assets 폴더 최상단에 있는 `NightVisitor_ProjectGuide.md` 문서를 먼저 읽고 현재 프로젝트 진행 상황과 코드 구조를 파악해 줘!"

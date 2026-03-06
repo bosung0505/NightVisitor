@@ -39,24 +39,11 @@ public class GunSelectManager : MonoBehaviour
     void Start()
     {
         // 1. IN_GAME 환경은 눈에 보이게 켜두되(그래야 숲이 보임), 
-        // 시간을 정지시킴으로써 동물의 행동과 애니메이션이 시작되지 않도록 '얼음' 처리합니다.
+        // 동물이 시작 전부터 움직이지 못하게 하기 위한 초기 세팅(TimeScale/볼륨)은 이제 StartGunSelection()에서 공통 처리합니다.
         if (inGameEnvironment != null && !inGameEnvironment.activeSelf)
         {
             inGameEnvironment.SetActive(true);
         }
-        
-        // 시간 정지!
-        Time.timeScale = 0f;
-
-        // 2. Hide In-Game UI, Setup Volumes
-        if (inGameUIPanel != null)
-        {
-            inGameUIPanel.alpha = 0f;
-            inGameUIPanel.gameObject.SetActive(false);
-        }
-        
-        // Priority 1인 덮어쓰기용 볼륨을 100% 켬 (그 밑의 Priority 0인 GlobalVolume을 가려버림)
-        if (volumeStart != null) volumeStart.weight = 1f;
 
         // 3. Setup Buttons
         if (gun1Button != null) gun1Button.onClick.AddListener(() => SelectGun(1));
@@ -66,12 +53,30 @@ public class GunSelectManager : MonoBehaviour
         SelectGun(1);
     }
 
+    public void PrepareGunSelection()
+    {
+        // --- 재시작(새 스테이지) 초기화 로직 (로딩 직후 즉시 호출됨) ---
+        Time.timeScale = 0f; // 시간 정지!
+        
+        if (inGameUIPanel != null)
+        {
+            inGameUIPanel.alpha = 0f;
+            inGameUIPanel.gameObject.SetActive(false);
+        }
+        
+        // Priority 1인 덮어쓰기용 볼륨을 100% 켬 (게임이 켜지자마자 번쩍이는 현상 방지)
+        if (volumeStart != null) volumeStart.weight = 1f;
+        // ----------------------------------------------------------------------
+    }
+
     public void StartGunSelection()
     {
         gameObject.SetActive(true);
         if (gunSelectPanel != null)
         {
             gunSelectPanel.alpha = 1f;
+            gunSelectPanel.interactable = true;
+            gunSelectPanel.blocksRaycasts = true;
         }
 
         if (countdownCoroutine != null) StopCoroutine(countdownCoroutine);

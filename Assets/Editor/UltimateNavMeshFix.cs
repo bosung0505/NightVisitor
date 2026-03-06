@@ -7,7 +7,7 @@ public class UltimateNavMeshFix : EditorWindow
     [MenuItem("Tools/Undo NavMesh Fix")]
     public static void Undo()
     {
-        NavMeshSurface surface = GameObject.FindObjectOfType<NavMeshSurface>();
+        NavMeshSurface surface = UnityEngine.Object.FindFirstObjectByType<NavMeshSurface>();
         if (surface != null)
         {
             surface.layerMask = -1; // -1 is 'Everything'
@@ -16,7 +16,7 @@ public class UltimateNavMeshFix : EditorWindow
 
         int restoredCount = 0;
 
-        MeshRenderer[] renderers = GameObject.FindObjectsOfType<MeshRenderer>(true);
+        MeshRenderer[] renderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         foreach (MeshRenderer r in renderers)
         {
             string rootName = r.transform.root.name.ToLower();
@@ -39,7 +39,7 @@ public class UltimateNavMeshFix : EditorWindow
             }
         }
 
-        Collider[] colliders = GameObject.FindObjectsOfType<Collider>(true);
+        Collider[] colliders = UnityEngine.Object.FindObjectsByType<Collider>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         foreach(Collider c in colliders)
         {
             string rootName = c.transform.root.name.ToLower();

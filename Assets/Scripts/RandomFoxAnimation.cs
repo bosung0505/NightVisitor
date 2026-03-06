@@ -34,6 +34,10 @@ public class RandomFoxAnimation : MonoBehaviour
     public float jumpAnticipationTime = 0.3f;
     [Tooltip("How long the fox slides forward during the jump")]
     public float jumpMoveTime = 0.8f;
+    [Tooltip("How long the fox must wait before jumping again")]
+    public float jumpCooldown = 2.0f;
+    private float lastJumpTime = -10f; // Initialize so it can jump immediately
+
     public float fleeDuration = 3f;
     public float catchWaitDuration = 0.5f;
     [Tooltip("Distance at which the fox catches the chicken")]
@@ -223,15 +227,22 @@ public class RandomFoxAnimation : MonoBehaviour
                 Vector3 desiredDir = agent.desiredVelocity.normalized;
                 float angleToDestination = Vector3.Angle(transform.forward, desiredDir);
                 
-                // 에이전트가 아직 덜 돌았거나 목적지를 향해 똑바로 가고 있지 않을 때 잡다한 점프 방지 
-                // (경미한 회전은 허용하기 위해 45도 정도의 여유를 줍니다)
-                if (agent.velocity.magnitude > 0.1f && angleToDestination > 45f)
+                // 에이전트가 내비메시를 따라 정상적으로 움직이고 있는데, 시선과 이동 방향이 다르면(예: 회전 중) 무시
+                if (agent.velocity.magnitude > 0.1f && angleToDestination > 30f)
                 {
                     Debug.Log($"Ignored Fence Jump. Angle too steep: {angleToDestination}");
                     return;
                 }
 
-                Debug.Log("Fence Detected! Jumping. Hit: " + hit.collider.gameObject.name);
+                // 점프 쿨타임 체크 (무한 루프 방지 핵심)
+                if (Time.time - lastJumpTime < jumpCooldown)
+                {
+                    Debug.Log($"Ignored Fence Jump. On Cooldown. ({Time.time - lastJumpTime:F1}s / {jumpCooldown}s)");
+                    return;
+                }
+
+                Debug.Log("Fence Detected and Path Aligned! Jumping. Hit: " + hit.collider.gameObject.name);
+                lastJumpTime = Time.time; // 점프 시간 기록
                 
                 // We are close to the fence. Transition to jump based on current state.
                 if (currentState == FoxState.Run)

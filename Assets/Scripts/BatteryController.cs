@@ -4,6 +4,8 @@ using UnityEngine.Rendering;
 
 public class BatteryController : MonoBehaviour
 {
+    public static BatteryController Instance;
+
     [Header("UI Battery Counts (순서대로 Count3, Count2, Count1)")]
     [Tooltip("인덱스 0에는 남은 60~40초 상태(Count3), 인덱스 1에는 40~20초 상태(Count2)를 넣어주세요. (꺼질 순서대로)")]
     public GameObject[] batteryCounts; // 보통 Count3, Count2 순서로 배열에 드래그 앤 드롭
@@ -22,11 +24,51 @@ public class BatteryController : MonoBehaviour
     private int currentDepleteIndex = 0;
     private bool isTransitioning = false;
 
+    private void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+        }
+    }
+
     void Start()
     {
         // 시작 시 초기 Weight 설정 보장
         if (thermalVolume != null) thermalVolume.weight = 1f;
         if (normalVolume != null) normalVolume.weight = 0f;
+    }
+
+    public void ResetBattery()
+    {
+        StopAllCoroutines();
+        
+        timer = 0f;
+        currentDepleteIndex = 0;
+        isTransitioning = false;
+
+        // 모든 배터리 UI 다시 켜기
+        if (batteryCounts != null)
+        {
+            foreach (GameObject count in batteryCounts)
+            {
+                if (count != null) count.SetActive(true);
+            }
+        }
+
+        // 볼륨 초기화
+        if (thermalVolume != null)
+        {
+            thermalVolume.gameObject.SetActive(true);
+            thermalVolume.weight = 1f;
+        }
+        if (normalVolume != null)
+        {
+            normalVolume.gameObject.SetActive(true);
+            normalVolume.weight = 0f;
+        }
+        
+        Debug.Log("[BatteryController] Battery and Volumes Reset!");
     }
 
     void Update()

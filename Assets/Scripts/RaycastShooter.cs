@@ -5,8 +5,15 @@ using System.Collections;
 
 public class RaycastShooter : MonoBehaviour
 {
+    public static RaycastShooter Instance;
+    
     private Camera mainCamera;
     private ParticleSystem bloodSplatter;
+
+    private void Awake()
+    {
+        if (Instance == null) Instance = this;
+    }
 
     [Header("Ammo & Reload Settings")]
     public int maxAmmoPerMag = 5;
@@ -54,8 +61,7 @@ public class RaycastShooter : MonoBehaviour
         }
 
         // --- 탄약 초기화 및 UI 바인딩 ---
-        currentAmmo = maxAmmoPerMag;
-        currentReloadableAmmo = maxReloadableAmmo;
+        ResetAmmo(); // 초기화 로직을 분리
 
         if (reloadButton != null)
         {
@@ -75,6 +81,9 @@ public class RaycastShooter : MonoBehaviour
 
     void Update()
     {
+        // 게임이 일시정지(시간 정지) 된 상태라면 조작 무시
+        if (Time.timeScale == 0f) return;
+
 #if ENABLE_INPUT_SYSTEM
         bool isTouching = UnityEngine.InputSystem.Touchscreen.current != null && 
                           UnityEngine.InputSystem.Touchscreen.current.touches.Count > 0 && 
@@ -106,6 +115,17 @@ public class RaycastShooter : MonoBehaviour
             Shoot();
         }
 #endif
+    }
+
+    /// <summary>
+    /// 게임(스테이지) 재시작 시 탄약을 원래대로 되돌리는 함수
+    /// </summary>
+    public void ResetAmmo()
+    {
+        currentAmmo = maxAmmoPerMag;
+        currentReloadableAmmo = maxReloadableAmmo;
+        isReloading = false; // 혹시 재장전 중이었다면 취소 처리
+        UpdateAmmoUI();
     }
 
     public void Shoot()
