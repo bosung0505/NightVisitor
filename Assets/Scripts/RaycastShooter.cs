@@ -75,6 +75,22 @@ public class RaycastShooter : MonoBehaviour
 
     void Update()
     {
+#if ENABLE_INPUT_SYSTEM
+        bool isTouching = UnityEngine.InputSystem.Touchscreen.current != null && 
+                          UnityEngine.InputSystem.Touchscreen.current.touches.Count > 0 && 
+                          UnityEngine.InputSystem.Touchscreen.current.touches[0].isInProgress;
+                          
+        if (!isTouching && UnityEngine.InputSystem.Mouse.current != null && UnityEngine.InputSystem.Mouse.current.leftButton.wasPressedThisFrame)
+        {
+            if (UnityEngine.EventSystems.EventSystem.current != null && 
+                UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
+            {
+                return;
+            }
+
+            Shoot();
+        }
+#else
         // PC 환경을 위한 마우스 사격 유지 (터치 중일 때는 동작 안함)
         // 안드로이드에서는 빈 화면 터치가 기본적으로 마우스 좌클릭(GetMouseButtonDown(0))으로
         // 함께 인식되기 때문에, touchCount == 0 조건을 넣어 화면 회전 중 오발사를 막음.
@@ -89,6 +105,7 @@ public class RaycastShooter : MonoBehaviour
 
             Shoot();
         }
+#endif
     }
 
     public void Shoot()

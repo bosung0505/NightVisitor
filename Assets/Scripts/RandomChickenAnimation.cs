@@ -39,12 +39,17 @@ public class RandomChickenAnimation : MonoBehaviour
     public float obstacleCheckDistance = 2.0f;
     public LayerMask obstacleLayerMask;
 
+    [Header("Audio")]
+    [Tooltip("AudioSource for the flapping sound to play while panicking/fleeing")]
+    public AudioSource flapAudioSource;
+
     private bool isWalkingState = false;
     private bool isFleeingState = false;
     private bool isPanicState = false;
     private bool isDead = false;
     private Quaternion targetRotation;
     private Coroutine behaviorRoutine;
+    private Coroutine flapSoundRoutine;
 
     void Start()
     {
@@ -53,6 +58,11 @@ public class RandomChickenAnimation : MonoBehaviour
         {
             Debug.LogError("RandomChickenAnimation requires an Animator component on the same GameObject!");
             return;
+        }
+
+        if (flapAudioSource != null)
+        {
+            flapAudioSource.loop = false; // 플랩 사운드는 코루틴에서 두 번만 재생
         }
 
         // Start the random behavior loop
@@ -161,10 +171,26 @@ public class RandomChickenAnimation : MonoBehaviour
         }
     }
 
+    private IEnumerator PlayFlapSoundTwice()
+    {
+        if (flapAudioSource != null && flapAudioSource.clip != null)
+        {
+            flapAudioSource.Play();
+            yield return new WaitForSeconds(flapAudioSource.clip.length);
+            
+            if (!isDead && (isFleeingState || isPanicState))
+            {
+                flapAudioSource.Play();
+            }
+        }
+    }
+
     public void StopAnimation()
     {
         // Stop the coroutine so it doesn't try to change animations anymore
         StopAllCoroutines();
+        if (flapAudioSource != null) flapAudioSource.Stop();
+
         // Ensure the chicken stops moving forward and rotating
         isWalkingState = false;
         isFleeingState = false;
@@ -202,6 +228,9 @@ public class RandomChickenAnimation : MonoBehaviour
         animator.SetTrigger("Run"); // Sometimes just setting the trigger helps jump to it faster
         animator.CrossFade("Chicken_002_run", 0.1f);
 
+        if (flapSoundRoutine != null) StopCoroutine(flapSoundRoutine);
+        flapSoundRoutine = StartCoroutine(PlayFlapSoundTwice());
+
         yield return new WaitForSeconds(fleeDuration);
 
         isFleeingState = false;
@@ -228,6 +257,9 @@ public class RandomChickenAnimation : MonoBehaviour
 
         animator.SetTrigger("Run");
         animator.CrossFade("Chicken_002_run", 0.1f);
+
+        if (flapSoundRoutine != null) StopCoroutine(flapSoundRoutine);
+        flapSoundRoutine = StartCoroutine(PlayFlapSoundTwice());
 
         float timer = 0f;
         while (timer < duration)

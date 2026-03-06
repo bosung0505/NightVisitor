@@ -60,7 +60,77 @@ public class CameraController : MonoBehaviour
 
         bool handledByTouch = false;
 
-        // --- 1. 모바일 환경: 터치 및 드래그 화면 회전 ---
+#if ENABLE_INPUT_SYSTEM
+        // --- 1. 모바일 환경: 터치 및 드래그 화면 회전 (New Input System) ---
+        if (UnityEngine.InputSystem.Touchscreen.current != null && UnityEngine.InputSystem.Touchscreen.current.touches.Count > 0)
+        {
+            var touch = UnityEngine.InputSystem.Touchscreen.current.touches[0];
+            var phase = touch.phase.ReadValue();
+
+            if (phase == UnityEngine.InputSystem.TouchPhase.Began)
+            {
+                // UI (버튼 등)를 터치한 것이 아니라, 빈 화면을 터치했을 때만 회전 시작
+                if (UnityEngine.EventSystems.EventSystem.current != null && 
+                    !UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject(touch.touchId.ReadValue()))
+                {
+                    isPanning = true;
+                    activeTouchId = touch.touchId.ReadValue();
+                }
+            }
+            else if ((phase == UnityEngine.InputSystem.TouchPhase.Moved || phase == UnityEngine.InputSystem.TouchPhase.Stationary) && isPanning && touch.touchId.ReadValue() == activeTouchId)
+            {
+                handledByTouch = true;
+                
+                // 터치 이동량(deltaPosition)에 따라 회전 (New Input System의 delta는 픽셀단위)
+                Vector2 deltaPos = touch.delta.ReadValue();
+                float moveX = deltaPos.x * touchPanSpeed * Time.deltaTime * 0.5f;
+                float moveY = deltaPos.y * touchPanSpeed * Time.deltaTime * 0.5f;
+
+                yaw += moveX;
+                pitch -= moveY;
+
+                pitch = Mathf.Clamp(pitch, -70f, 70f);
+                yaw = Mathf.Clamp(yaw, -80f, 80f);
+            }
+            else if (phase == UnityEngine.InputSystem.TouchPhase.Ended || phase == UnityEngine.InputSystem.TouchPhase.Canceled)
+            {
+                if (touch.touchId.ReadValue() == activeTouchId)
+                {
+                    isPanning = false;
+                    activeTouchId = -1;
+                }
+            }
+        }
+
+        // --- 2. PC 환경: 마우스 우클릭 화면 회전 유지 (터치가 없을 때만 작동) ---
+        if (!handledByTouch && (UnityEngine.InputSystem.Touchscreen.current == null || UnityEngine.InputSystem.Touchscreen.current.touches.Count == 0))
+        {
+            if (UnityEngine.InputSystem.Mouse.current != null)
+            {
+                if (UnityEngine.InputSystem.Mouse.current.rightButton.wasPressedThisFrame)
+                {
+                    isPanning = true;
+                }
+                else if (UnityEngine.InputSystem.Mouse.current.rightButton.wasReleasedThisFrame)
+                {
+                    isPanning = false;
+                }
+
+                if (isPanning && UnityEngine.InputSystem.Mouse.current.rightButton.isPressed)
+                {
+                    float mouseX = UnityEngine.InputSystem.Mouse.current.delta.x.ReadValue() * panSpeed * Time.deltaTime * 0.05f;
+                    float mouseY = UnityEngine.InputSystem.Mouse.current.delta.y.ReadValue() * panSpeed * Time.deltaTime * 0.05f;
+
+                    yaw += mouseX;
+                    pitch -= mouseY;
+
+                    pitch = Mathf.Clamp(pitch, -70f, 70f);
+                    yaw = Mathf.Clamp(yaw, -80f, 80f);
+                }
+            }
+        }
+#else
+        // --- 1. 모바일 환경: 터치 및 드래그 화면 회전 (Old Input System) ---
         if (Input.touchCount > 0)
         {
             Touch touch = Input.GetTouch(0);
@@ -123,6 +193,7 @@ public class CameraController : MonoBehaviour
                 yaw = Mathf.Clamp(yaw, -80f, 80f);
             }
         }
+#endif
         
         // 최종 각도 적용 (마우스/터치 회전 + 반동 + 숨쉬기 반영)
         transform.eulerAngles = new Vector3(pitch + currentRecoilOffset.x + breathPitch, yaw + currentRecoilOffset.y + breathYaw, currentRecoilOffset.z);
