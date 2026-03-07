@@ -14,6 +14,14 @@ public struct StageConfig
     public float foxSpawnInterval;
     [Tooltip("이 스테이지에서 여우가 스폰될 위치들 (빈 게임오브젝트 리스트)")]
     public Transform[] spawnPoints;
+    [Tooltip("이 스테이지에서 동시에 필드에 존재할 수 있는 최대 여우 마리 수 (기본 1)")]
+    public int maxConcurrentFoxes;
+    
+    [Header("Difficulty Settings")]
+    [Tooltip("배터리 소모 속도 배수 (기본 1.0 = 정상 속도, 1.5 = 1.5배 빠름, 2.0 = 2배 빠름)")]
+    public float batteryDepleteRate; // 기본값 처리는 하단에서 1.0f로
+    [Tooltip("이 스테이지에서 주어지는 총 예비 탄약 수 (음수면 기본 30발 유지)")]
+    public int maxReloadableAmmo;
 }
 
 public class StageSelectManager : MonoBehaviour
@@ -100,7 +108,11 @@ public class StageSelectManager : MonoBehaviour
                 int targetKills = config.targetKillCount;
                 float interval = config.foxSpawnInterval;
                 Transform[] points = config.spawnPoints;
-                config.playButton.onClick.AddListener(() => OnPlayStageClicked(targetKills, interval, points));
+                int maxConcurrent = config.maxConcurrentFoxes <= 0 ? 1 : config.maxConcurrentFoxes;
+                float batteryRate = config.batteryDepleteRate <= 0.1f ? 1.0f : config.batteryDepleteRate; // 0이거나 너무 작으면 1배속
+                int ammoLimit = config.maxReloadableAmmo; // 그대로 넣고, -1 같은 음수 처리는 RaycastShooter에서
+
+                config.playButton.onClick.AddListener(() => OnPlayStageClicked(targetKills, interval, points, maxConcurrent, batteryRate, ammoLimit));
             }
         }
 
@@ -118,7 +130,7 @@ public class StageSelectManager : MonoBehaviour
         }
     }
 
-    public void OnPlayStageClicked(int targetKillCount, float spawnInterval, Transform[] spawnPoints)
+    public void OnPlayStageClicked(int targetKillCount, float spawnInterval, Transform[] spawnPoints, int maxConcurrentFoxes = 1, float batteryRate = 1.0f, int ammoLimit = -1)
     {
         // 1. Fade out the Map/Stage Panel
         if (mapStagePanel != null)
@@ -137,6 +149,12 @@ public class StageSelectManager : MonoBehaviour
         }
 
         // --- 완전 새 게임을 위한 환경 초기화 (시체 치우기, 닭 복구, 총알 장전 등) ---
+        // 탄약과 배터리가 초기화되기 전에 이번 스테이지 난이도 정보를 전달
+        if (RaycastShooter.Instance != null)
+        {
+            RaycastShooter.Instance.InitAmmoLimit(ammoLimit);
+        }
+
         ResetGameEnvironment();
 
 
@@ -170,7 +188,7 @@ public class StageSelectManager : MonoBehaviour
         // 스폰 매니저(FoxManager)에게 스폰 간격과 포인트 전달
         if (FoxManager.Instance != null)
         {
-            FoxManager.Instance.InitStage(spawnInterval, spawnPoints);
+            FoxManager.Instance.InitStage(spawnInterval, spawnPoints, maxConcurrentFoxes);
         }
         else
         {
@@ -180,6 +198,7 @@ public class StageSelectManager : MonoBehaviour
         // 4. 배터리 상태 초기화 (새로운 스테이지)
         if (BatteryController.Instance != null)
         {
+            BatteryController.Instance.InitBatteryRate(batteryRate);
             BatteryController.Instance.ResetBattery();
         }
 

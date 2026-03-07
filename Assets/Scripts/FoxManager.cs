@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class FoxManager : MonoBehaviour
 {
@@ -15,6 +16,12 @@ public class FoxManager : MonoBehaviour
     // 스테이지에서 받아온 커스텀 스폰 위치
     private Transform[] currentSpawnPoints;
     private int currentSpawnPointIndex = 0; // 순차적으로 스폰하기 위한 인덱스
+
+    [Tooltip("현재 스테이지의 동시 활성화 여우 수 제한")]
+    public int currentMaxConcurrentFoxes = 1;
+
+    [Tooltip("현재 필드에 활성화되어 있는 여우들")]
+    public List<GameObject> activeFoxes = new List<GameObject>();
 
     private int currentFoxIndex = 0;
     private bool isWaitingForNext = false;
@@ -58,20 +65,28 @@ public class FoxManager : MonoBehaviour
         }
     }
 
-    public void InitStage(float spawnInterval, Transform[] customSpawnPoints)
+    public void InitStage(float spawnInterval, Transform[] customSpawnPoints, int maxConcurrent = 1)
     {
         currentSpawnInterval = spawnInterval;
         currentSpawnPoints = customSpawnPoints;
         currentSpawnPointIndex = 0; // 처음 스폰 포인트부터 시작
+        currentMaxConcurrentFoxes = maxConcurrent <= 0 ? 1 : maxConcurrent; // 0이하 방지
         
-        Debug.Log($"[FoxManager] InitStage: interval={spawnInterval}, points count={(currentSpawnPoints != null ? currentSpawnPoints.Length : 0)}");
+        Debug.Log($"[FoxManager] InitStage: interval={spawnInterval}, points count={(currentSpawnPoints != null ? currentSpawnPoints.Length : 0)}, maxConcurrent={currentMaxConcurrentFoxes}");
 
-        // 이전에 남아있던 여우들이 있다면 제거
+        // 이전에 남아있던 여우들이 있다면 제거 (구 배열 참조)
         for (int i = 0; i < foxes.Length; i++)
         {
             if (foxes[i] != null) Destroy(foxes[i]);
             foxes[i] = null;
         }
+        
+        // 새로 관리할 활성화 리스트도 완전히 비워줍니다.
+        foreach (var fox in activeFoxes)
+        {
+            if (fox != null) Destroy(fox);
+        }
+        activeFoxes.Clear();
 
         currentFoxIndex = -1; // 다음 스폰 때 0으로 됨
         stageStarted = true;
@@ -83,29 +98,32 @@ public class FoxManager : MonoBehaviour
 
     void Update()
     {
-        if (!stageStarted || foxes.Length == 0) return;
-        if (currentFoxIndex < 0 || currentFoxIndex >= foxes.Length) return;
+        if (!stageStarted || foxPrefabs == null || foxPrefabs.Length == 0) return;
 
-        GameObject currentFox = foxes[currentFoxIndex];
-
-        // Check if the current fox was destroyed (escaped)
-        if (currentFox == null)
+        // 1. 활성화 리스트 청소 (죽거나 완전히 사라진(null) 여우는 목록에서 제거)
+        // 리스트에서 지울 때는 뒤에서부터 지워야 인덱스가 꼬이지 않습니다.
+        for (int i = activeFoxes.Count - 1; i >= 0; i--)
         {
-            if (!isWaitingForNext)
+            GameObject fox = activeFoxes[i];
+            if (fox == null)
             {
-                StartCoroutine(SpawnNextFoxRoutine());
+                activeFoxes.RemoveAt(i);
             }
-            return;
+            else
+            {
+                RandomFoxAnimation anim = fox.GetComponent<RandomFoxAnimation>();
+                // 여우가 죽어서 바닥에 누워있다면 자리 하나를 내어줍니다.
+                if (anim != null && anim.currentState == RandomFoxAnimation.FoxState.Dead)
+                {
+                    activeFoxes.RemoveAt(i);
+                }
+            }
         }
 
-        // Check if the current fox was shot (Dead state)
-        RandomFoxAnimation anim = currentFox.GetComponent<RandomFoxAnimation>();
-        if (anim != null && anim.currentState == RandomFoxAnimation.FoxState.Dead)
+        // 2. 스폰 조건 확인: 현재 활성화된 마릿수가 허용치보다 적고, 스폰 대기 중이 아니라면 충원!
+        if (activeFoxes.Count < currentMaxConcurrentFoxes && !isWaitingForNext)
         {
-            if (!isWaitingForNext)
-            {
-                StartCoroutine(SpawnNextFoxRoutine());
-            }
+            StartCoroutine(SpawnNextFoxRoutine(false));
         }
     }
 
@@ -148,11 +166,14 @@ public class FoxManager : MonoBehaviour
             }
 
             // We overwrite the array index with a newly spawned fox at the calculated coordinates.
-            foxes[currentFoxIndex] = Instantiate(foxPrefabs[currentFoxIndex], spawnPos, spawnRot);
-            foxes[currentFoxIndex].name = foxPrefabs[currentFoxIndex].name.Replace("_PrefabRef", "");
+            GameObject newlySpawnedFox = Instantiate(foxPrefabs[currentFoxIndex], spawnPos, spawnRot);
+            newlySpawnedFox.name = foxPrefabs[currentFoxIndex].name.Replace("_PrefabRef", "");
             
             // Activate the new fox
-            foxes[currentFoxIndex].SetActive(true);
+            newlySpawnedFox.SetActive(true);
+            
+            // 관리 리스트에 추가
+            activeFoxes.Add(newlySpawnedFox);
         }
 
         isWaitingForNext = false;

@@ -19,6 +19,9 @@ public class RaycastShooter : MonoBehaviour
     public int maxAmmoPerMag = 5;
     [Tooltip("총 예비 탄약량 (시작할 때 주어지는 탄약 총량)")]
     public int maxReloadableAmmo = 30;
+    private int originalMaxReloadableAmmo; // 원래 설정된 기본 예비 탄약량 기억용
+    private int currentStageMaxAmmo;       // 이번 스테이지에 적용될 예비 탄약량
+    
     private int currentAmmo;
     private int currentReloadableAmmo;
     private bool isReloading = false;
@@ -59,6 +62,10 @@ public class RaycastShooter : MonoBehaviour
         {
             bloodSplatter = splatterObj.GetComponent<ParticleSystem>();
         }
+
+        // 초기 인스펙터 값을 저장해 둡니다.
+        originalMaxReloadableAmmo = maxReloadableAmmo;
+        currentStageMaxAmmo = originalMaxReloadableAmmo;
 
         // --- 탄약 초기화 및 UI 바인딩 ---
         ResetAmmo(); // 초기화 로직을 분리
@@ -118,12 +125,29 @@ public class RaycastShooter : MonoBehaviour
     }
 
     /// <summary>
+    /// 스테이지 매니저가 이번 스테이지의 탄약 한도를 전달하는 함수
+    /// </summary>
+    public void InitAmmoLimit(int customLimit)
+    {
+        if (customLimit < 0)
+        {
+            // 음수(-1)라면 기존 인스펙터의 디폴트값 사용
+            currentStageMaxAmmo = originalMaxReloadableAmmo;
+        }
+        else
+        {
+            // 양수(또는 0 제한)라면 해당 스테이지 전용 탄발 수 적용
+            currentStageMaxAmmo = customLimit;
+        }
+    }
+
+    /// <summary>
     /// 게임(스테이지) 재시작 시 탄약을 원래대로 되돌리는 함수
     /// </summary>
     public void ResetAmmo()
     {
         currentAmmo = maxAmmoPerMag;
-        currentReloadableAmmo = maxReloadableAmmo;
+        currentReloadableAmmo = currentStageMaxAmmo; 
         isReloading = false; // 혹시 재장전 중이었다면 취소 처리
         UpdateAmmoUI();
     }
@@ -148,6 +172,17 @@ public class RaycastShooter : MonoBehaviour
         // 격발 시 총알 감소 및 UI 갱신
         currentAmmo--;
         UpdateAmmoUI();
+
+        // --- [신규 추가] 방금 쏜 총알이 마지막 탄약이었을 경우 미션 실패 처리 ---
+        if (currentAmmo <= 0 && currentReloadableAmmo <= 0)
+        {
+            Debug.Log("Run out of all ammo! Mission Failed.");
+            if (KillCountManager.Instance != null)
+            {
+                // 약간의 딜레이(예: 탄피 떨어지는 시간) 후 패널을 띄우고 싶다면 코루틴 사용 권장, 여기서는 즉시 호출
+                KillCountManager.Instance.ShowMissionFailedPanel();
+            }
+        }
 
         if (mainCamera == null)
         {

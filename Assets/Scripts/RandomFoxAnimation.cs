@@ -192,8 +192,8 @@ public class RandomFoxAnimation : MonoBehaviour
                     awayFromCenterDir.y = 0;
                 }
                 
-                // 다시 새로운 도망갈 곳(내비메시 위)을 찾아서 계속 뜁니다.
-                escapeDestination = GetRandomNavMeshLocation(transform.position + (awayFromCenterDir * 20f), 15f);
+                // 새로운 벽 타기(슬라이딩) 로직을 적용한 목적지 갱신
+                escapeDestination = GetSlidingEscapeDestination(transform.position, awayFromCenterDir.normalized, 20f);
                 agent.SetDestination(escapeDestination);
             }
             break;
@@ -291,8 +291,8 @@ public class RandomFoxAnimation : MonoBehaviour
         escapeDir = Quaternion.Euler(0, randomAngle, 0) * escapeDir;
         escapeDir.y = 0;
         
-        // 내비메시 위에서 도달 가능한 유효한 도망 목적지 찾기
-        escapeDestination = GetRandomNavMeshLocation(transform.position + (escapeDir.normalized * 20f), 10f);
+        // 내비메시 위에서 도달 가능한 유효한 도망 목적지 찾기 (벽 타기 로직 적용)
+        escapeDestination = GetSlidingEscapeDestination(transform.position, escapeDir.normalized, 20f);
 
         SetState(FoxState.Escape);
         
@@ -302,23 +302,42 @@ public class RandomFoxAnimation : MonoBehaviour
 
     private IEnumerator EscapeAndDisappearRoutine()
     {
-        // Wait until we are far enough from the center to safely disappear
-        if (huntingZoneCenter != null)
+        // 렌더러 참조 (시야 밖 체크 용도)
+        SkinnedMeshRenderer renderer = GetComponentInChildren<SkinnedMeshRenderer>();
+
+        while (true)
         {
-            while (true)
+            bool isFarEnough = false;
+            bool isOutOfSight = false;
+
+            // 1. 거리 체크 (40 이상)
+            if (huntingZoneCenter != null)
             {
                 float distFromCenter = Vector3.Distance(transform.position, huntingZoneCenter.position);
                 if (distFromCenter >= escapeDisappearDistance)
                 {
-                    break;
+                    isFarEnough = true;
                 }
-                yield return new WaitForSeconds(0.5f); // Check twice a second
             }
-        }
-        else
-        {
-            // Fallback just in case there is no center defined
-            yield return new WaitForSeconds(10f);
+
+            // 2. 시야 체크 (화면 밖인가?)
+            if (renderer != null && !renderer.isVisible)
+            {
+                isOutOfSight = true;
+            }
+            // 렌더러가 없으면 그냥 안 보인다고 가정
+            else if (renderer == null)
+            {
+                isOutOfSight = true; 
+            }
+
+            // 둘 중 하나라도 만족하면(OR 조건) 삭제
+            if (isFarEnough || isOutOfSight)
+            {
+                break;
+            }
+
+            yield return new WaitForSeconds(0.5f); // 0.5초마다 검사
         }
         
         // Optionally add a fade-out effect here by shrinking or adjusting materials
@@ -430,6 +449,27 @@ public class RandomFoxAnimation : MonoBehaviour
 
         // After jumping the fence outward, resume escaping
         SetState(FoxState.Escape);
+
+        // --- [핵심 추가] 착지 직후에 무조건 바깥 방향으로 새로운 목적지를 강제 갱신시켜버림! (뒤돌아보는 버그 완전 차단) ---
+        if (currentState == FoxState.Escape)
+        {
+            Vector3 awayDir = transform.forward; // 일단 뛴 방향 앞쪽으로
+            if (huntingZoneCenter != null)
+            {
+                // 착지한 현재 위치를 기준으로 다시 바깥쪽 계산
+                awayDir = (transform.position - huntingZoneCenter.position).normalized;
+                awayDir.y = 0;
+            }
+            // 미끄러지는 벽 타기 로직 다시 적용해서 멀리 좌표 찍어줌 (20 거리)
+            escapeDestination = GetSlidingEscapeDestination(transform.position, awayDir, 20f);
+
+            // NavMeshAgent가 유효하고 동작 중일 때만 목적지 하드 리셋
+            if (agent.isActiveAndEnabled && agent.isOnNavMesh)
+            {
+                agent.ResetPath(); // 꼬여있던 이전 경로 싹 지우기
+                agent.SetDestination(escapeDestination); // 새 목적지 강제 주입
+            }
+        }
     }
 
     private void FindClosestChicken()
@@ -469,8 +509,8 @@ public class RandomFoxAnimation : MonoBehaviour
         if (fleeDirection == Vector3.zero) fleeDirection = -transform.forward;
         fleeDirection.y = 0; 
         
-        // 해당 뱡향 쪽으로 내비메시 위에서 도달 가능한 유효한 도망 목적지 찾기
-        escapeDestination = GetRandomNavMeshLocation(transform.position + (fleeDirection.normalized * 20f), 10f);
+        // 해당 뱡향 쪽으로 내비메시 위에서 도달 가능한 유효한 도망 목적지 찾기 (벽 타기 로직 적용)
+        escapeDestination = GetSlidingEscapeDestination(transform.position, fleeDirection.normalized, 20f);
 
         SetState(FoxState.Escape);
         
@@ -526,5 +566,52 @@ public class RandomFoxAnimation : MonoBehaviour
         
         // 도저히 찾을 수 없을 땐, 에러 방지를 위해 현재 위치 반환
         return transform.position;
+    }
+
+    // --- [신규 추가] 내비메시 테두리를 감지하고 벽을 따라 미끄러지는(슬라이딩) 목적지를 반환하는 함수 ---
+    private Vector3 GetSlidingEscapeDestination(Vector3 startPos, Vector3 direction, float distance)
+    {
+        Vector3 targetPos = startPos + (direction * distance);
+        NavMeshHit hit;
+
+        // 1차 레이캐스트: 목적지로 향하는 도중 내비메시 끝(맵 테두리)에 닿는지 검사
+        if (NavMesh.Raycast(startPos, targetPos, out hit, NavMesh.AllAreas))
+        {
+            // 부딪힌 벽의 법선 벡터(수직 방향)를 구함
+            Vector3 wallNormal = hit.normal;
+            wallNormal.y = 0; // 평면상 이동을 위해 Y축 무시
+
+            // 벡터 투영: 원래 가려던 방향을 벽면에 밀착시켜 미끄러지는(Slide) 새로운 방향 도출
+            Vector3 slideDir = Vector3.ProjectOnPlane(direction, wallNormal).normalized;
+            
+            // 미끄러지는 방향으로 새로운 타겟 위치 계산
+            Vector3 slideTarget = hit.position + (slideDir * (distance * 0.5f)); // 남은 거리를 절반 정도로 보정
+
+            // 2차 레이캐스트: 'ㄱ'자 구석인지(미끄러지는 방향도 막혀있는지) 한 번 더 검사
+            NavMeshHit cornerHit;
+            if (NavMesh.Raycast(hit.position, slideTarget, out cornerHit, NavMesh.AllAreas))
+            {
+                // 여기도 막혔다면 완벽한 구석(코너)에 갇힌 것! 
+                // 왔던 길(slideDir)의 아예 반대 방향으로 뒤를 돌아 맵을 타고 탈출하게 만듦
+                Vector3 escapeCornerDir = -slideDir;
+                Vector3 cornerTarget = cornerHit.position + (escapeCornerDir * (distance * 0.5f));
+                
+                // 최종적으로 구한 코너 탈출 좌표가 안전한 내비메시 위인지 SamplePosition으로 최종 보정
+                NavMeshHit finalHit;
+                if (NavMesh.SamplePosition(cornerTarget, out finalHit, 5f, NavMesh.AllAreas))
+                {
+                    return finalHit.position;
+                }
+                return startPos; // 최후의 보루 
+            }
+            else
+            {
+                // 코너가 아니라 평범한 직선 벽이므로 정상적으로 미끄러지며 계속 도망감
+                return slideTarget;
+            }
+        }
+
+        // 레이저가 어디에도 안 부딪혔다면(탁 트인 내부) 원래 목적지로 직진!
+        return targetPos;
     }
 }

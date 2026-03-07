@@ -29,6 +29,12 @@ public class KillCountManager : MonoBehaviour
     [Tooltip("MissionClear_Panel 내부의 돌아가기 버튼")]
     public Button backToStageButton;
 
+    [Tooltip("배터리 방전 등 게임 실패 시 나타날 MissionFailed_Panel (CanvasGroup 추천)")]
+    public CanvasGroup missionFailedPanel;
+
+    [Tooltip("MissionFailed_Panel 내부의 돌아가기(재시도/포기) 버튼")]
+    public Button failedBackToStageButton;
+
     [Header("Settings")]
     [Tooltip("Kill_Info UI가 켜져 있는 시간 (초)")]
     public float displayDuration = 1.5f;
@@ -75,10 +81,21 @@ public class KillCountManager : MonoBehaviour
             missionClearPanel.gameObject.SetActive(false);
         }
 
+        if (missionFailedPanel != null)
+        {
+            missionFailedPanel.alpha = 0f;
+            missionFailedPanel.gameObject.SetActive(false);
+        }
+
         // 돌아가기 버튼 이벤트 연결
         if (backToStageButton != null)
         {
             backToStageButton.onClick.AddListener(OnBackToStageClicked);
+        }
+
+        if (failedBackToStageButton != null)
+        {
+            failedBackToStageButton.onClick.AddListener(OnBackToStageClicked);
         }
 
         // 로비에 있는 StageSelectManager 에서 OnPlayStageClicked 할 때 InitMission()을 호출해줄 예정
@@ -102,6 +119,12 @@ public class KillCountManager : MonoBehaviour
         {
             missionClearPanel.alpha = 0f;
             missionClearPanel.gameObject.SetActive(false);
+        }
+
+        if (missionFailedPanel != null)
+        {
+            missionFailedPanel.alpha = 0f;
+            missionFailedPanel.gameObject.SetActive(false);
         }
 
         // TimeScale 복구 (스테이지 재시작용)
@@ -215,6 +238,28 @@ public class KillCountManager : MonoBehaviour
         }
     }
 
+    public void ShowMissionFailedPanel()
+    {
+        Debug.Log("[KillCountManager] ShowMissionFailedPanel() Triggered!");
+        
+        // 미션 실패 시 인게임 진행(적 움직임, 탄약, 시간 등)을 모두 정지합니다.
+        Time.timeScale = 0f;
+
+        if (missionFailedPanel != null)
+        {
+            missionFailedPanel.gameObject.SetActive(true);
+            missionFailedPanel.DOFade(1f, panelFadeDuration).SetUpdate(true).OnComplete(() => 
+            {
+                missionFailedPanel.interactable = true;
+                missionFailedPanel.blocksRaycasts = true;
+            });
+        }
+        else
+        {
+            Debug.LogError("[KillCountManager] missionFailedPanel 이 할당되지 않았습니다!");
+        }
+    }
+
     private void OnBackToStageClicked()
     {
         Debug.Log("[KillCountManager] Returning to Map. Hiding Mission Clear Panel.");
@@ -227,6 +272,16 @@ public class KillCountManager : MonoBehaviour
             missionClearPanel.DOFade(0f, panelFadeDuration).SetUpdate(true).OnComplete(() =>
             {
                 missionClearPanel.gameObject.SetActive(false);
+            });
+        }
+
+        if (missionFailedPanel != null)
+        {
+            missionFailedPanel.interactable = false;
+            missionFailedPanel.blocksRaycasts = false;
+            missionFailedPanel.DOFade(0f, panelFadeDuration).SetUpdate(true).OnComplete(() =>
+            {
+                missionFailedPanel.gameObject.SetActive(false);
             });
         }
 
