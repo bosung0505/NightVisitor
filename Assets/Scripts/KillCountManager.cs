@@ -35,6 +35,44 @@ public class KillCountManager : MonoBehaviour
     [Tooltip("MissionFailed_Panel 내부의 돌아가기(재시도/포기) 버튼")]
     public Button failedBackToStageButton;
 
+    [Header("Reward & Result UI Settings (Clear Panel)")]
+    [Tooltip("각 결과 패널 안의 'DayResult -> Coyote_eliminated -> Count' 텍스트")]
+    public TextMeshProUGUI resultFoxCountText;
+    public TextMeshProUGUI resultFoxGoldText;  // Earned_Gold 텍스트
+
+    [Tooltip("각 결과 패널 안의 'DayResult -> Dead_Chicken -> Count' 텍스트")]
+    public TextMeshProUGUI resultChickenCountText;
+    public TextMeshProUGUI resultChickenGoldText; // Earned_Gold 텍스트
+
+    [Tooltip("각 결과 패널 안의 'DayResult -> Consumed_Bullet -> Count' 텍스트")]
+    public TextMeshProUGUI resultBulletCountText;
+    public TextMeshProUGUI resultBulletGoldText;  // Earned_Gold 텍스트
+
+    [Tooltip("총 합산 보상이 표시될 텍스트 (예: Total Reward)")]
+    public TextMeshProUGUI totalRewardText;
+
+    [Header("Reward & Result UI Settings (Failed Panel)")]
+    [Tooltip("실패 패널 전용 텍스트들 (Clear Panel과 동일하게 연결해주세요)")]
+    public TextMeshProUGUI failFoxCountText;
+    public TextMeshProUGUI failFoxGoldText;
+    public TextMeshProUGUI failChickenCountText;
+    public TextMeshProUGUI failChickenGoldText;
+    public TextMeshProUGUI failBulletCountText;
+    public TextMeshProUGUI failBulletGoldText;
+    public TextMeshProUGUI failTotalRewardText;
+
+    [Header("Global Money UI")]
+    [Tooltip("현재 내 누적 보유 골드가 표시될 텍스트 (예: Have)")]
+    public TextMeshProUGUI currentHaveGoldText;
+
+    [Header("Reward Values (Per Stage)")]
+    [Tooltip("여우 1마리 처치 시 획득 골드")]
+    public int goldPerKill = 100;
+    [Tooltip("닭 1마리 희생 시 차감 골드")]
+    public int penaltyPerDeadChicken = 30;
+    [Tooltip("탄창 1개(5발) 소모 시 차감 골드")]
+    public int penaltyPerMagazine = 5;
+
     [Header("Settings")]
     [Tooltip("Kill_Info UI가 켜져 있는 시간 (초)")]
     public float displayDuration = 1.5f;
@@ -42,8 +80,16 @@ public class KillCountManager : MonoBehaviour
     [Tooltip("미션 클리어 패널이 등장하는 데 걸리는 시간")]
     public float panelFadeDuration = 0.5f;
 
+    // 현재 플레이 세션(스테이지)에서 누적 중인 수치들
     private int currentKills = 0;
+    private int deadChickens = 0;
+    private int consumedBullets = 0;
+    
     private int targetKills = 0; // 이번 스테이지의 목표 킬 수
+
+    // 글로벌 누적 골드 (앱을 끄면 날아가는 임시 저장소)
+    public static int currentSessionGold = 0;
+
     private bool isCleared = false; // 클리어 여부 플래그
     private Coroutine hideCoroutine; // 현재 진행중인 숨김 코루틴
 
@@ -108,6 +154,9 @@ public class KillCountManager : MonoBehaviour
     public void InitMission(int target)
     {
         currentKills = 0;
+        deadChickens = 0;
+        consumedBullets = 0;
+        
         targetKills = target;
         isCleared = false;
 
@@ -196,6 +245,69 @@ public class KillCountManager : MonoBehaviour
         hideCoroutine = null;
     }
 
+    /// <summary>
+    /// 닭이 희생되었을 때 (여우에게 잡히거나 플레이어 오발) 호출
+    /// </summary>
+    public void AddDeadChicken()
+    {
+        deadChickens++;
+        Debug.Log($"[KillCountManager] 닭 사망! 현재 누적 죽은 닭: {deadChickens}");
+    }
+
+    /// <summary>
+    /// 플레이어가 총알을 쏠 때 호출
+    /// </summary>
+    public void AddConsumedBullet()
+    {
+        consumedBullets++;
+    }
+
+    private void CalculateAndShowResults()
+    {
+        // 1. 카운트 텍스트 갱신 (Clear & Fail)
+        if (resultFoxCountText != null) resultFoxCountText.text = currentKills.ToString();
+        if (failFoxCountText != null) failFoxCountText.text = currentKills.ToString();
+
+        if (resultChickenCountText != null) resultChickenCountText.text = deadChickens.ToString();
+        if (failChickenCountText != null) failChickenCountText.text = deadChickens.ToString();
+
+        if (resultBulletCountText != null) resultBulletCountText.text = consumedBullets.ToString();
+        if (failBulletCountText != null) failBulletCountText.text = consumedBullets.ToString();
+
+        // 2. 항목별 획득/차감 골드 계산
+        int foxGold = currentKills * goldPerKill;
+        int chickenPenalty = deadChickens * penaltyPerDeadChicken;
+        
+        // 총알은 5발(1탄창)당 차감 (소수점 버림)
+        int magazinesUsed = consumedBullets / 5;
+        int bulletPenalty = magazinesUsed * penaltyPerMagazine;
+
+        // 3. UI에 개별 획득 골드를 형식에 맞게 텍스트로 표기 (예: "+ 500", "- 30")
+        if (resultFoxGoldText != null) resultFoxGoldText.text = $"+ {foxGold:N0}";
+        if (failFoxGoldText != null) failFoxGoldText.text = $"+ {foxGold:N0}";
+
+        if (resultChickenGoldText != null) resultChickenGoldText.text = $"- {chickenPenalty:N0}";
+        if (failChickenGoldText != null) failChickenGoldText.text = $"- {chickenPenalty:N0}";
+
+        if (resultBulletGoldText != null) resultBulletGoldText.text = $"- {bulletPenalty:N0}";
+        if (failBulletGoldText != null) failBulletGoldText.text = $"- {bulletPenalty:N0}";
+
+        // 4. 총합 보상 계산
+        int totalReward = foxGold - chickenPenalty - bulletPenalty;
+        string totalRewardStr = totalReward >= 0 ? $"+ {totalReward:N0}" : $"- {Mathf.Abs(totalReward):N0}";
+        
+        if (totalRewardText != null) totalRewardText.text = totalRewardStr;
+        if (failTotalRewardText != null) failTotalRewardText.text = totalRewardStr;
+
+        // 5. 누적 세션 보유 골드에 합산
+        currentSessionGold += totalReward;
+        if (currentSessionGold < 0) currentSessionGold = 0; // 보유 자산 마이너스 방지
+
+        if (currentHaveGoldText != null) currentHaveGoldText.text = currentSessionGold.ToString("N0");
+        
+        Debug.Log($"[KillCountManager] 정산 완료 - 번 돈: {totalReward}, 현재 가진 돈: {currentSessionGold}");
+    }
+
     private void OnMissionCleared()
     {
         Debug.Log("Mission Cleared! Activating StageClear Button.");
@@ -223,6 +335,9 @@ public class KillCountManager : MonoBehaviour
         // 미션 클리어 시 인게임 진행(적 움직임, 탄약, 시간 등)을 모두 정지합니다.
         Time.timeScale = 0f;
 
+        // 골드 계산 및 결과창 텍스트 세팅
+        CalculateAndShowResults();
+
         if (missionClearPanel != null)
         {
             missionClearPanel.gameObject.SetActive(true);
@@ -244,6 +359,9 @@ public class KillCountManager : MonoBehaviour
         
         // 미션 실패 시 인게임 진행(적 움직임, 탄약, 시간 등)을 모두 정지합니다.
         Time.timeScale = 0f;
+
+        // 골드 계산 및 결과창 텍스트 세팅 (실패 시에도 집계하여 보여줌)
+        CalculateAndShowResults();
 
         if (missionFailedPanel != null)
         {

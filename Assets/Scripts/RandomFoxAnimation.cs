@@ -268,6 +268,10 @@ public class RandomFoxAnimation : MonoBehaviour
         // Destroy the target chicken and enable the caught chicken model
         if (targetChicken != null)
         {
+            if (KillCountManager.Instance != null)
+            {
+                KillCountManager.Instance.AddDeadChicken();
+            }
             Destroy(targetChicken.gameObject);
         }
         if (catchChickenObj != null)

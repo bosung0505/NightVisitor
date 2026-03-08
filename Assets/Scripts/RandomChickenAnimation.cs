@@ -191,6 +191,12 @@ public class RandomChickenAnimation : MonoBehaviour
         StopAllCoroutines();
         if (flapAudioSource != null) flapAudioSource.Stop();
 
+        // 닭이 죽을 때 통계 집계 (한 번만 처리되도록 isDead 분기 확인)
+        if (!isDead && KillCountManager.Instance != null)
+        {
+            KillCountManager.Instance.AddDeadChicken();
+        }
+
         // Ensure the chicken stops moving forward and rotating
         isWalkingState = false;
         isFleeingState = false;

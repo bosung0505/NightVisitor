@@ -13,6 +13,10 @@ public class RaycastShooter : MonoBehaviour
     private void Awake()
     {
         if (Instance == null) Instance = this;
+        
+        // Awake 단계에서 초기 인스펙터 값을 저장해 둡니다. (StageSelectManager보다 먼저 세팅되기 위함)
+        originalMaxReloadableAmmo = maxReloadableAmmo;
+        currentStageMaxAmmo = originalMaxReloadableAmmo;
     }
 
     [Header("Ammo & Reload Settings")]
@@ -62,10 +66,6 @@ public class RaycastShooter : MonoBehaviour
         {
             bloodSplatter = splatterObj.GetComponent<ParticleSystem>();
         }
-
-        // 초기 인스펙터 값을 저장해 둡니다.
-        originalMaxReloadableAmmo = maxReloadableAmmo;
-        currentStageMaxAmmo = originalMaxReloadableAmmo;
 
         // --- 탄약 초기화 및 UI 바인딩 ---
         ResetAmmo(); // 초기화 로직을 분리
@@ -142,12 +142,14 @@ public class RaycastShooter : MonoBehaviour
     }
 
     /// <summary>
-    /// 게임(스테이지) 재시작 시 탄약을 원래대로 되돌리는 함수
-    /// </summary>
     public void ResetAmmo()
     {
         currentAmmo = maxAmmoPerMag;
-        currentReloadableAmmo = currentStageMaxAmmo; 
+        
+        // 예비 탄약에서 기본 지급된 5성을 먼저 뺌
+        int startingReserve = currentStageMaxAmmo - maxAmmoPerMag;
+        currentReloadableAmmo = Mathf.Max(0, startingReserve);
+
         isReloading = false; // 혹시 재장전 중이었다면 취소 처리
         UpdateAmmoUI();
     }
@@ -167,6 +169,12 @@ public class RaycastShooter : MonoBehaviour
         if (shootSound != null && audioSource != null)
         {
             audioSource.PlayOneShot(shootSound);
+        }
+
+        // 탄약 소모 집계
+        if (KillCountManager.Instance != null)
+        {
+            KillCountManager.Instance.AddConsumedBullet();
         }
 
         // 격발 시 총알 감소 및 UI 갱신
