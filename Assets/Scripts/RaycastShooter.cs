@@ -346,6 +346,97 @@ public class RaycastShooter : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 특정 화면 좌표(스코프 중앙)에서 레이캐스트를 쏩니다.
+    /// Shoot()의 모든 로직을 공유하되, 레이 방향만 스코프 중앙 화면 좌표를 사용합니다.
+    /// </summary>
+    public void ShootAt(Vector2 screenPos)
+    {
+        if (isReloading || currentAmmo <= 0)
+        {
+            if (emptyClickSound != null && audioSource != null) audioSource.PlayOneShot(emptyClickSound);
+            return;
+        }
+
+        if (shootSound != null && audioSource != null) audioSource.PlayOneShot(shootSound);
+
+        if (KillCountManager.Instance != null) KillCountManager.Instance.AddConsumedBullet();
+
+        currentAmmo--;
+        UpdateAmmoUI();
+
+        if (currentAmmo <= 0 && currentReloadableAmmo <= 0)
+        {
+            if (KillCountManager.Instance != null) KillCountManager.Instance.ShowMissionFailedPanel();
+        }
+
+        if (mainCamera == null) return;
+
+        CameraController camController = mainCamera.GetComponent<CameraController>();
+        if (camController != null) camController.AddRealisticRecoil(recoilUp, recoilSide);
+
+        // 핵심: 스코프 중앙 화면 좌표에서 레이캐스트
+        Ray ray = mainCamera.ScreenPointToRay(new Vector3(screenPos.x, screenPos.y, 0f));
+        RaycastHit hit;
+        if (Physics.Raycast(ray, out hit))
+        {
+            Debug.DrawLine(ray.origin, hit.point, Color.green, 2f);
+
+            if (bloodSplatter != null)
+            {
+                bloodSplatter.transform.position = hit.point;
+                bloodSplatter.transform.rotation = Quaternion.LookRotation(hit.normal);
+                bloodSplatter.Play();
+            }
+
+            Hitbox hitbox = hit.collider.GetComponent<Hitbox>();
+            if (hitbox == null) hitbox = hit.collider.GetComponentInParent<Hitbox>();
+
+            if (hitbox != null)
+            {
+                hitbox.TakeDamage(currentGunDamage, hit.point);
+            }
+            else
+            {
+                Animator animator = hit.collider.GetComponent<Animator>();
+                if (animator == null) animator = hit.collider.GetComponentInParent<Animator>();
+                if (animator != null)
+                {
+                    RandomChickenAnimation chickenAnim = animator.GetComponent<RandomChickenAnimation>();
+                    if (chickenAnim != null) chickenAnim.StopAnimation();
+
+                    RandomFoxAnimation foxAnim = animator.GetComponent<RandomFoxAnimation>();
+                    if (foxAnim != null) foxAnim.StopAnimation();
+
+                    DecoyFoxAI decoyAnim = animator.GetComponent<DecoyFoxAI>();
+                    if (decoyAnim != null) decoyAnim.StopAnimation();
+
+                    animator.SetTrigger("Die");
+
+                    if (KillCountManager.Instance != null && (foxAnim != null || decoyAnim != null))
+                        KillCountManager.Instance.AddKill();
+                }
+            }
+
+            Collider[] colliders = Physics.OverlapSphere(hit.point, fleeRadius);
+            foreach (Collider nearby in colliders)
+            {
+                if (nearby.gameObject == hit.collider.gameObject) continue;
+                RandomChickenAnimation chicken = nearby.GetComponent<RandomChickenAnimation>();
+                if (chicken == null) chicken = nearby.GetComponentInParent<RandomChickenAnimation>();
+                if (chicken != null) chicken.FleeFrom(hit.point);
+
+                RandomFoxAnimation fox = nearby.GetComponent<RandomFoxAnimation>();
+                if (fox == null) fox = nearby.GetComponentInParent<RandomFoxAnimation>();
+                if (fox != null) fox.FleeFrom(hit.point);
+
+                DecoyFoxAI decoyFox = nearby.GetComponent<DecoyFoxAI>();
+                if (decoyFox == null) decoyFox = nearby.GetComponentInParent<DecoyFoxAI>();
+                if (decoyFox != null) decoyFox.FleeFrom(hit.point);
+            }
+        }
+    }
+
     // === [신규 로직] 장전 시스템 ===
     public void TryReload()
     {

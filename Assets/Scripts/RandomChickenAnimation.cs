@@ -51,6 +51,10 @@ public class RandomChickenAnimation : MonoBehaviour
     private Coroutine behaviorRoutine;
     private Coroutine flapSoundRoutine;
 
+    // [최적화] SphereCast 타이머: 매 프레임이 아닌 0.1초 간격으로만 검사
+    private float obstacleCheckTimer = 0f;
+    private const float OBSTACLE_CHECK_INTERVAL = 0.1f;
+
     void Start()
     {
         animator = GetComponent<Animator>();
@@ -124,41 +128,35 @@ public class RandomChickenAnimation : MonoBehaviour
         {
             float currentRotSpeed = rotationSpeed;
             if (isFleeingState) currentRotSpeed *= 2f;
-            if (isPanicState) currentRotSpeed *= 5f; // Thrashing around very fast
+            if (isPanicState) currentRotSpeed *= 5f;
 
-            // -------------------------------------------------------------------
-            // [추가된 로직] 장애물(울타리) 회피: 앞으로 가는 길에 울타리가 있으면 반사각으로 목표 방향 변경
-            // -------------------------------------------------------------------
+            // [최적화] 장애물 검사를 0.1초 간격으로만 실행 (매 프레임 SphereCast → CPU 절약)
             if (!isDead)
             {
-                // default to everything mask if not set
-                int mask = obstacleLayerMask.value == 0 ? ~0 : obstacleLayerMask.value;
-                RaycastHit hit;
-                
-                // 닭의 약간 위(0.5f)에서 앞쪽으로 구(Sphere)를 쏘아서 체크
-                if (Physics.SphereCast(transform.position + Vector3.up * 0.5f, 0.3f, transform.forward, out hit, obstacleCheckDistance, mask))
+                obstacleCheckTimer += Time.deltaTime;
+                if (obstacleCheckTimer >= OBSTACLE_CHECK_INTERVAL)
                 {
-                    string hitName = hit.collider.gameObject.name.ToLower();
-                    if (hitName.Contains("fence") || hit.collider.CompareTag("Fence"))
+                    obstacleCheckTimer = 0f;
+                    int mask = obstacleLayerMask.value == 0 ? ~0 : obstacleLayerMask.value;
+                    RaycastHit hit;
+                    if (Physics.SphereCast(transform.position + Vector3.up * 0.5f, 0.3f, transform.forward, out hit, obstacleCheckDistance, mask))
                     {
-                        Debug.DrawRay(hit.point, hit.normal, Color.blue, 0.5f);
-                        // 충돌한 표면(울타리)의 법선 백터(normal)를 기준으로 반사되는(팅겨나가는) 방향 계산
-                        Vector3 reflectDir = Vector3.Reflect(transform.forward, hit.normal);
-                        reflectDir.y = 0;
-                        if (reflectDir != Vector3.zero)
+                        // [최적화] string 생성 제거 → CompareTag만 사용 (GC 0)
+                        if (hit.collider.CompareTag("Fence"))
                         {
-                            targetRotation = Quaternion.LookRotation(reflectDir.normalized);
+                            Vector3 reflectDir = Vector3.Reflect(transform.forward, hit.normal);
+                            reflectDir.y = 0;
+                            if (reflectDir != Vector3.zero)
+                                targetRotation = Quaternion.LookRotation(reflectDir.normalized);
                         }
                     }
                 }
             }
 
-            // Smoothly rotate towards the target rotation
+            // 회전 및 이동은 매 프레임 유지 (부드러운 움직임 필요)
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, currentRotSpeed * Time.deltaTime);
 
             AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
-
-            // Only move if the specific animation is playing
             if (isWalkingState && stateInfo.IsName("Chicken_003_walk") && !animator.IsInTransition(0))
             {
                 transform.Translate(Vector3.forward * moveSpeed * Time.deltaTime, Space.Self);

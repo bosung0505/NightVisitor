@@ -56,6 +56,10 @@ public class RandomFoxAnimation : MonoBehaviour
     private Vector3 escapeDestination;
     private bool isJumpMoving = false;
 
+    // [최적화] Walk/Sneak 목적지 갱신 타이머 (매 프레임 SetDestination 방지)
+    private float destUpdateTimer = 0f;
+    private const float DEST_UPDATE_INTERVAL = 0.2f;
+
     void Start()
     {
         animator = GetComponent<Animator>();
@@ -132,12 +136,23 @@ public class RandomFoxAnimation : MonoBehaviour
         {
             case FoxState.Walk:
                 agent.speed = walkSpeed;
-                agent.SetDestination(GetDestinationDefault());
+                // [최적화] Walk/Sneak은 0.2초 간격으로만 SetDestination 갱신 (HuntingZone는 고정 목표)
+                destUpdateTimer += Time.deltaTime;
+                if (destUpdateTimer >= DEST_UPDATE_INTERVAL)
+                {
+                    destUpdateTimer = 0f;
+                    agent.SetDestination(GetDestinationDefault());
+                }
                 break;
                 
             case FoxState.Sneak:
                 agent.speed = sneakSpeed;
-                agent.SetDestination(GetDestinationDefault());
+                destUpdateTimer += Time.deltaTime;
+                if (destUpdateTimer >= DEST_UPDATE_INTERVAL)
+                {
+                    destUpdateTimer = 0f;
+                    agent.SetDestination(GetDestinationDefault());
+                }
                 break;
                 
             case FoxState.Run:
@@ -217,10 +232,8 @@ public class RandomFoxAnimation : MonoBehaviour
         RaycastHit hit;
         if (Physics.SphereCast(rayOrigin, sphereRadius, transform.forward, out hit, jumpTriggerDistance, mask))
         {
-            string hitName = hit.collider.gameObject.name.ToLower();
-            
-            // Only log if it hits a fence, to avoid spamming the console with Terrain/Ground hits
-            if (hitName.Contains("fence") || hit.collider.CompareTag("Fence")) 
+            // [최적화] string.ToLower() + Contains 제거 → CompareTag만 사용 (GC 0)
+            if (hit.collider.CompareTag("Fence")) 
             {
                 // [수정점] 여우가 현재 가고자 하는 방향(agent.desiredVelocity)과 
                 // 시선의 방향(transform.forward) 사이의 각도를 계산합니다.

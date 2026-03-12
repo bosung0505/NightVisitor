@@ -99,6 +99,25 @@ public class CameraController : MonoBehaviour
     }
 
     [Header("New Touch/Click Mechanics")]
+    [Tooltip("드래그 취소 영역 UI (RectTransform)")]
+    public RectTransform cancelZoneUI;
+    [Tooltip("조준점(크로스헤어) 이미지 - 취소 구역 진입 시 색상 변경")]
+    public UnityEngine.UI.Image crosshairImage;
+    public Color normalCrosshairColor = Color.white;
+    public Color cancelCrosshairColor = Color.red;
+
+    [Header("Scope UI Movement")]
+    [Tooltip("이동할 스코프 오버레이 UI (검정 + 타원 구멍 이미지를 가진 RectTransform)")]
+    public RectTransform scopeOverlayUI;
+    [Tooltip("스코프 드래그 감도 (1.0 = 손가락과 같은 속도)")]
+    public float scopeDragSensitivity = 1f;
+    [Tooltip("스코프가 화면 경계에서 유지할 여유 거리 (픽셀)")]
+    public Vector2 scopeMargin = new Vector2(80f, 120f);
+    private Vector2 scopeDefaultAnchoredPos;
+
+    // 취소 영역 진입 여부
+    private bool isPointerInCancelZone = false;
+
     [Tooltip("줌 상태일 때 게임 속도 (슬로우 모션 배율)")]
     public float zoomTimeScale = 0.5f;
     [Tooltip("터치 후 줌이 켜질 때까지 기다리는 최소 대기 시간 (초)")]
@@ -111,6 +130,35 @@ public class CameraController : MonoBehaviour
     private float zoomActiveTimer = 0f;
     private bool isAimMode = false;      // 줌 상태에 진입했는지 여부
     private Vector2 touchStartPosition;  // 터치 시작 지점 (움직임 판독용)
+
+    private bool IsPointerInCancelZone(Vector2 screenPos)
+    {
+        if (cancelZoneUI == null || !cancelZoneUI.gameObject.activeInHierarchy) return false;
+        return RectTransformUtility.RectangleContainsScreenPoint(cancelZoneUI, screenPos);
+    }
+
+    // 스코프 UI를 delta만큼 이동 (화면 경계 클램핑 포함)
+    private void MoveScopeUI(Vector2 delta)
+    {
+        if (scopeOverlayUI == null) return;
+        Vector2 newPos = scopeOverlayUI.anchoredPosition + delta * scopeDragSensitivity;
+        float halfW = Screen.width  * 0.5f - scopeMargin.x;
+        float halfH = Screen.height * 0.5f - scopeMargin.y;
+        newPos.x = Mathf.Clamp(newPos.x, -halfW, halfW);
+        newPos.y = Mathf.Clamp(newPos.y, -halfH, halfH);
+        scopeOverlayUI.anchoredPosition = newPos;
+    }
+
+    // 스코프 중앙의 화면 좌표 반환
+    private Vector2 GetScopeScreenCenter()
+    {
+        if (scopeOverlayUI == null) return new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+        Vector3[] corners = new Vector3[4];
+        scopeOverlayUI.GetWorldCorners(corners);
+        Vector3 center = (corners[0] + corners[2]) * 0.5f;
+        // Canvas가 Screen Space - Overlay이면 worldCorners == screen coords
+        return new Vector2(center.x, center.y);
+    }
 
     void Update()
     {
@@ -189,26 +237,34 @@ public class CameraController : MonoBehaviour
                 handledByTouch = true;
                 
                 Vector2 currentPos = touch.position.ReadValue();
-                float dist = Vector2.Distance(touchStartPosition, currentPos);
+                Vector2 deltaPos   = touch.delta.ReadValue();
 
-                // 만약 터치 시작점에서 너무 멀리 스와이프됐다면 줌 시도를 취소하고 그냥 패닝 모드로 진입
-                if (!isAimMode && dist > touchStationaryThreshold)
-                {
-                    isPanning = true;
-                }
+                // 취소 영역 검사
+                isPointerInCancelZone = (isAimMode && isZooming) ? IsPointerInCancelZone(currentPos) : false;
+                if (crosshairImage != null)
+                    crosshairImage.color = isPointerInCancelZone ? cancelCrosshairColor : normalCrosshairColor;
+
+                float dist = Vector2.Distance(touchStartPosition, currentPos);
+                if (!isAimMode && dist > touchStationaryThreshold) isPanning = true;
 
                 if (isPanning)
                 {
-                    // 터치 이동량(deltaPosition)에 따라 회전 (New Input System의 delta는 픽셀단위)
-                    Vector2 deltaPos = touch.delta.ReadValue();
-                    float moveX = deltaPos.x * currentTouchSensitivity * Time.unscaledDeltaTime * 0.5f;
-                    float moveY = deltaPos.y * currentTouchSensitivity * Time.unscaledDeltaTime * 0.5f;
-
-                    yaw += moveX;
-                    pitch -= moveY;
-
-                    pitch = Mathf.Clamp(pitch, -70f, 70f);
-                    yaw = Mathf.Clamp(yaw, -80f, 80f);
+                    if (isAimMode && isZooming)
+                    {
+                        // ★ 줌 중: 카메라 고정, 스코프 UI만 이동
+                        if (!isPointerInCancelZone)
+                            MoveScopeUI(new Vector2(deltaPos.x, deltaPos.y));
+                    }
+                    else
+                    {
+                        // 줌 전: 카메라 패닝
+                        float moveX = deltaPos.x * currentTouchSensitivity * Time.unscaledDeltaTime * 0.5f;
+                        float moveY = deltaPos.y * currentTouchSensitivity * Time.unscaledDeltaTime * 0.5f;
+                        yaw   += moveX;
+                        pitch -= moveY;
+                        pitch = Mathf.Clamp(pitch, -70f, 70f);
+                        yaw   = Mathf.Clamp(yaw,   -80f, 80f);
+                    }
                 }
                 else if (!isAimMode)
                 {
@@ -227,17 +283,17 @@ public class CameraController : MonoBehaviour
                 {
                     if (isAimMode && isZooming)
                     {
-                        // 줌 상태에서 손가락을 떼면 격발
-                        if (RaycastShooter.Instance != null && Time.timeScale > 0)
+                        // 취소 구역 밖에서 손 뗌 → 스코프 중앙으로 격발
+                        if (!isPointerInCancelZone && RaycastShooter.Instance != null && Time.timeScale > 0)
                         {
-                            RaycastShooter.Instance.Shoot();
+                            RaycastShooter.Instance.ShootAt(GetScopeScreenCenter());
                         }
                     }
 
-                    // 터치가 끝나면 모두 초기화
                     CancelAimMode();
                     isPanning = false;
                     activeTouchId = -1;
+                    isPointerInCancelZone = false;
                 }
             }
         }
@@ -258,37 +314,50 @@ public class CameraController : MonoBehaviour
                 {
                     if (isAimMode && isZooming)
                     {
-                        // 줌 상태에서 손가락을 떼면 격발
-                        if (RaycastShooter.Instance != null && Time.timeScale > 0)
+                        if (!isPointerInCancelZone && RaycastShooter.Instance != null && Time.timeScale > 0)
                         {
-                            RaycastShooter.Instance.Shoot();
+                            RaycastShooter.Instance.ShootAt(GetScopeScreenCenter());
                         }
                     }
 
                     CancelAimMode();
                     isPanning = false;
+                    isPointerInCancelZone = false;
                 }
 
                 if (UnityEngine.InputSystem.Mouse.current.rightButton.isPressed)
                 {
                     Vector2 currentPos = UnityEngine.InputSystem.Mouse.current.position.ReadValue();
-                    float dist = Vector2.Distance(touchStartPosition, currentPos);
 
-                    if (!isAimMode && dist > touchStationaryThreshold)
-                    {
-                        isPanning = true;
-                    }
+                    isPointerInCancelZone = (isAimMode && isZooming) ? IsPointerInCancelZone(currentPos) : false;
+                    if (crosshairImage != null)
+                        crosshairImage.color = isPointerInCancelZone ? cancelCrosshairColor : normalCrosshairColor;
+
+                    float dist = Vector2.Distance(touchStartPosition, currentPos);
+                    if (!isAimMode && dist > touchStationaryThreshold) isPanning = true;
 
                     if (isPanning)
                     {
-                        float mouseX = UnityEngine.InputSystem.Mouse.current.delta.x.ReadValue() * currentPanSensitivity * Time.unscaledDeltaTime * 0.05f;
-                        float mouseY = UnityEngine.InputSystem.Mouse.current.delta.y.ReadValue() * currentPanSensitivity * Time.unscaledDeltaTime * 0.05f;
-
-                        yaw += mouseX;
-                        pitch -= mouseY;
-
-                        pitch = Mathf.Clamp(pitch, -70f, 70f);
-                        yaw = Mathf.Clamp(yaw, -80f, 80f);
+                        if (isAimMode && isZooming)
+                        {
+                            // ★ 줌 중: 스코프 UI 이동
+                            if (!isPointerInCancelZone)
+                            {
+                                Vector2 mouseDelta = new Vector2(
+                                    UnityEngine.InputSystem.Mouse.current.delta.x.ReadValue(),
+                                    UnityEngine.InputSystem.Mouse.current.delta.y.ReadValue());
+                                MoveScopeUI(mouseDelta);
+                            }
+                        }
+                        else
+                        {
+                            float mouseX = UnityEngine.InputSystem.Mouse.current.delta.x.ReadValue() * currentPanSensitivity * Time.unscaledDeltaTime * 0.05f;
+                            float mouseY = UnityEngine.InputSystem.Mouse.current.delta.y.ReadValue() * currentPanSensitivity * Time.unscaledDeltaTime * 0.05f;
+                            yaw   += mouseX;
+                            pitch -= mouseY;
+                            pitch = Mathf.Clamp(pitch, -70f, 70f);
+                            yaw   = Mathf.Clamp(yaw,   -80f, 80f);
+                        }
                     }
                     else if (!isAimMode)
                     {
@@ -329,24 +398,30 @@ public class CameraController : MonoBehaviour
             {
                 handledByTouch = true;
                 
-                float dist = Vector2.Distance(touchStartPosition, touch.position);
+                isPointerInCancelZone = (isAimMode && isZooming) ? IsPointerInCancelZone(touch.position) : false;
+                if (crosshairImage != null)
+                    crosshairImage.color = isPointerInCancelZone ? cancelCrosshairColor : normalCrosshairColor;
 
-                if (!isAimMode && dist > touchStationaryThreshold)
-                {
-                    isPanning = true;
-                }
+                float dist = Vector2.Distance(touchStartPosition, touch.position);
+                if (!isAimMode && dist > touchStationaryThreshold) isPanning = true;
                 
                 if (isPanning)
                 {
-                    // 터치 이동량(deltaPosition)에 따라 회전
-                    float moveX = touch.deltaPosition.x * currentTouchSensitivity * Time.unscaledDeltaTime * 60f; // Old Input 보정
-                    float moveY = touch.deltaPosition.y * currentTouchSensitivity * Time.unscaledDeltaTime * 60f;
-
-                    yaw += moveX;
-                    pitch -= moveY;
-
-                    pitch = Mathf.Clamp(pitch, -70f, 70f);
-                    yaw = Mathf.Clamp(yaw, -80f, 80f);
+                    if (isAimMode && isZooming)
+                    {
+                        // ★ 줌 중: 스코프 UI 이동
+                        if (!isPointerInCancelZone)
+                            MoveScopeUI(touch.deltaPosition);
+                    }
+                    else
+                    {
+                        float moveX = touch.deltaPosition.x * currentTouchSensitivity * Time.unscaledDeltaTime * 60f;
+                        float moveY = touch.deltaPosition.y * currentTouchSensitivity * Time.unscaledDeltaTime * 60f;
+                        yaw   += moveX;
+                        pitch -= moveY;
+                        pitch = Mathf.Clamp(pitch, -70f, 70f);
+                        yaw   = Mathf.Clamp(yaw,   -80f, 80f);
+                    }
                 }
                 else if (!isAimMode)
                 {
@@ -360,20 +435,20 @@ public class CameraController : MonoBehaviour
             }
             else if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
             {
-                // 현재 할당된 손가락이 떨어지면
                 if (touch.fingerId == activeTouchId)
                 {
                     if (isAimMode && isZooming)
                     {
-                        if (RaycastShooter.Instance != null && Time.timeScale > 0)
+                        if (!isPointerInCancelZone && RaycastShooter.Instance != null && Time.timeScale > 0)
                         {
-                            RaycastShooter.Instance.Shoot();
+                            RaycastShooter.Instance.ShootAt(GetScopeScreenCenter());
                         }
                     }
 
                     CancelAimMode();
                     isPanning = false;
                     activeTouchId = -1;
+                    isPointerInCancelZone = false;
                 }
             }
         }
@@ -392,35 +467,48 @@ public class CameraController : MonoBehaviour
             {
                 if (isAimMode && isZooming)
                 {
-                    if (RaycastShooter.Instance != null && Time.timeScale > 0)
+                    if (!isPointerInCancelZone && RaycastShooter.Instance != null && Time.timeScale > 0)
                     {
-                        RaycastShooter.Instance.Shoot();
+                        RaycastShooter.Instance.ShootAt(GetScopeScreenCenter());
                     }
                 }
 
                 CancelAimMode();
                 isPanning = false;
+                isPointerInCancelZone = false;
             }
 
             if (Input.GetMouseButton(1))
             {
-                float dist = Vector2.Distance(touchStartPosition, Input.mousePosition);
+                isPointerInCancelZone = (isAimMode && isZooming) ? IsPointerInCancelZone(Input.mousePosition) : false;
+                if (crosshairImage != null)
+                    crosshairImage.color = isPointerInCancelZone ? cancelCrosshairColor : normalCrosshairColor;
 
-                if (!isAimMode && dist > touchStationaryThreshold)
-                {
-                    isPanning = true;
-                }
+                float dist = Vector2.Distance(touchStartPosition, Input.mousePosition);
+                if (!isAimMode && dist > touchStationaryThreshold) isPanning = true;
 
                 if (isPanning)
                 {
-                    float mouseX = Input.GetAxis("Mouse X") * currentPanSensitivity * Time.unscaledDeltaTime * 60f;
-                    float mouseY = Input.GetAxis("Mouse Y") * currentPanSensitivity * Time.unscaledDeltaTime * 60f;
-
-                    yaw += mouseX;
-                    pitch -= mouseY;
-
-                    pitch = Mathf.Clamp(pitch, -70f, 70f);
-                    yaw = Mathf.Clamp(yaw, -80f, 80f);
+                    if (isAimMode && isZooming)
+                    {
+                        // ★ 줌 중: 스코프 UI 이동
+                        if (!isPointerInCancelZone)
+                        {
+                            Vector2 mouseDelta = new Vector2(
+                                Input.GetAxis("Mouse X") * currentPanSensitivity * 60f,
+                                Input.GetAxis("Mouse Y") * currentPanSensitivity * 60f);
+                            MoveScopeUI(mouseDelta * Time.unscaledDeltaTime);
+                        }
+                    }
+                    else
+                    {
+                        float mouseX = Input.GetAxis("Mouse X") * currentPanSensitivity * Time.unscaledDeltaTime * 60f;
+                        float mouseY = Input.GetAxis("Mouse Y") * currentPanSensitivity * Time.unscaledDeltaTime * 60f;
+                        yaw   += mouseX;
+                        pitch -= mouseY;
+                        pitch = Mathf.Clamp(pitch, -70f, 70f);
+                        yaw   = Mathf.Clamp(yaw,   -80f, 80f);
+                    }
                 }
                 else if (!isAimMode)
                 {
@@ -479,6 +567,17 @@ public class CameraController : MonoBehaviour
             // 슬로우 모션
             Time.timeScale = zoomTimeScale;
             Time.fixedDeltaTime = 0.02f * Time.timeScale;
+            
+            if (cancelZoneUI != null) cancelZoneUI.gameObject.SetActive(true);
+
+            // 스코프 UI 표시 & 중앙 위치 초기화
+            if (scopeOverlayUI != null)
+            {
+                scopeDefaultAnchoredPos = scopeOverlayUI.anchoredPosition;
+                scopeOverlayUI.anchoredPosition = Vector2.zero; // 화면 정중앙
+                scopeOverlayUI.gameObject.SetActive(true);
+            }
+            
             return;
         }
         
@@ -503,6 +602,17 @@ public class CameraController : MonoBehaviour
         {
             Time.timeScale = 1f;
             Time.fixedDeltaTime = 0.02f;
+        }
+
+        if (cancelZoneUI != null) cancelZoneUI.gameObject.SetActive(false);
+        if (crosshairImage != null) crosshairImage.color = normalCrosshairColor;
+        isPointerInCancelZone = false;
+
+        // 스코프 UI 숨기기 & 위치 원복
+        if (scopeOverlayUI != null)
+        {
+            scopeOverlayUI.anchoredPosition = scopeDefaultAnchoredPos;
+            scopeOverlayUI.gameObject.SetActive(false);
         }
     }
 
