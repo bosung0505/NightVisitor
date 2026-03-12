@@ -15,6 +15,15 @@ MonoBehaviour:
   itemName: Perfect Rifle
   category: 0
   itemIcon: {fileID: 21300000, guid: b77984c65978d47499c516f51eba9941, type: 3}
-  iconSize: {x: 130, y: 75}
-  itemPrice: 299
-  itemDescription: Recoil 5 / reloadable ammunition 8 / Body shot damage 2
+  iconSize: {x: 100, y: 55}
+  itemPrice: 0
+  itemDescription: Recoil 2 / reloadable ammunition 8 / Body shot damage 3
+  gunDamage: 3
+  shootSound: {fileID: 8300000, guid: 982b1896316155b4fbd2cc5cef6d79a6, type: 3}
+  maxAmmoInClip: 8
+  recoilUp: 2
+  recoilSide: 1
+  zoomMultiplier: 1
+  fogStartDistance: 0
+  fogEndDistance: 0
+  batteryEfficiencyMultiplier: 1

@@ -148,5 +148,7 @@ public class GunSelectManager : MonoBehaviour
         {
             DOTween.To(() => volumeStart.weight, x => volumeStart.weight = x, 0f, transitionDuration);
         }
+
+        gameObject.SetActive(false);
     }
 }

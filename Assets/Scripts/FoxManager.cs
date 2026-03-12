@@ -16,9 +16,11 @@ public class FoxManager : MonoBehaviour
     // 스테이지에서 받아온 커스텀 스폰 위치
     private Transform[] currentSpawnPoints;
     private int currentSpawnPointIndex = 0; // 순차적으로 스폰하기 위한 인덱스
-
     [Tooltip("현재 스테이지의 동시 활성화 여우 수 제한")]
     public int currentMaxConcurrentFoxes = 1;
+
+    [Tooltip("현재 스테이지에서 여우가 Sneak 과정을 무시하는지 여부")]
+    public bool currentIgnoreSneakZone = false;
 
     [Tooltip("현재 필드에 활성화되어 있는 여우들")]
     public List<GameObject> activeFoxes = new List<GameObject>();
@@ -65,23 +67,28 @@ public class FoxManager : MonoBehaviour
         }
     }
 
-    public void InitStage(float spawnInterval, Transform[] customSpawnPoints, int maxConcurrent = 1)
+    public void InitStage(float spawnInterval, Transform[] customSpawnPoints, int maxConcurrent = 1, bool ignoreSneakZone = false)
     {
         currentSpawnInterval = spawnInterval;
         currentSpawnPoints = customSpawnPoints;
         currentSpawnPointIndex = 0; // 처음 스폰 포인트부터 시작
         currentMaxConcurrentFoxes = maxConcurrent <= 0 ? 1 : maxConcurrent; // 0이하 방지
+        currentIgnoreSneakZone = ignoreSneakZone;
         
-        Debug.Log($"[FoxManager] InitStage: interval={spawnInterval}, points count={(currentSpawnPoints != null ? currentSpawnPoints.Length : 0)}, maxConcurrent={currentMaxConcurrentFoxes}");
+        Debug.Log($"[FoxManager] InitStage: interval={spawnInterval}, points count={(currentSpawnPoints != null ? currentSpawnPoints.Length : 0)}, maxConcurrent={currentMaxConcurrentFoxes}, ignoreSneakZone={currentIgnoreSneakZone}");
 
         // 이전에 남아있던 여우들이 있다면 제거 (구 배열 참조)
+        // [수정] foxes 배열 원본 오브젝트들을 무조건 Destroy하면 다음 생성 때 에러가 날 수 있습니다. (원본이 파괴됨)
+        // 원본 배열은 비활성화만 유지하고 냅둡니다.
         for (int i = 0; i < foxes.Length; i++)
         {
-            if (foxes[i] != null) Destroy(foxes[i]);
-            foxes[i] = null;
+            if (foxes[i] != null)
+            {
+                foxes[i].SetActive(false); // 무조건 끄기만 함
+            }
         }
         
-        // 새로 관리할 활성화 리스트도 완전히 비워줍니다.
+        // 새로 관리할 활성화 리스트는 인스턴스화된 클론들이므로 완전히 파괴하고 지워줍니다.
         foreach (var fox in activeFoxes)
         {
             if (fox != null) Destroy(fox);
@@ -94,6 +101,13 @@ public class FoxManager : MonoBehaviour
 
         // 즉시 첫 번째 여우 스폰 시작
         StartCoroutine(SpawnNextFoxRoutine(true));
+    }
+
+    public void StopSpawning()
+    {
+        stageStarted = false;
+        StopAllCoroutines();
+        Debug.Log("[FoxManager] Spawning stopped.");
     }
 
     void Update()
@@ -169,6 +183,13 @@ public class FoxManager : MonoBehaviour
             GameObject newlySpawnedFox = Instantiate(foxPrefabs[currentFoxIndex], spawnPos, spawnRot);
             newlySpawnedFox.name = foxPrefabs[currentFoxIndex].name.Replace("_PrefabRef", "");
             
+            // --- [신규 로직] 스폰된 여우에게 현재 스테이지의 SneakZone 무시 옵션을 전달 ---
+            RandomFoxAnimation foxAnim = newlySpawnedFox.GetComponent<RandomFoxAnimation>();
+            if (foxAnim != null)
+            {
+                foxAnim.ignoreSneakZone = currentIgnoreSneakZone;
+            }
+
             // Activate the new fox
             newlySpawnedFox.SetActive(true);
             

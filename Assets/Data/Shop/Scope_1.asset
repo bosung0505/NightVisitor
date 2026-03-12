@@ -16,6 +16,10 @@ MonoBehaviour:
   category: 1
   itemIcon: {fileID: 21300000, guid: 31fea31bbeae02845b00f6a9adb857a0, type: 3}
   iconSize: {x: 50, y: 130}
-  itemPrice: 99
+  itemPrice: 0
   itemDescription: Support 2X maginificatioin / 640 resolution / detection distance
-    150yd
+    150yd / Battery Efficiency 30
+  zoomMultiplier: 2
+  fogStartDistance: 30
+  fogEndDistance: 130
+  batteryEfficiencyMultiplier: 1.5

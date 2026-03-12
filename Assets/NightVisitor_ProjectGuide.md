@@ -82,6 +82,26 @@ AI 보조 개발자가 프로젝트 진행 상황을 빠르게 파악하고 맥�
 * **스테이지 전환 탄약 버그 수정 (`RaycastShooter.cs`):**
     * 새로운 스테이지 진입 시 설정된 예비 총탄 수(`maxReloadableAmmo`)가 꼬이던 현상을 수정했습니다. 기본 최대값을 기억하는 로직을 `Awake()`로 올려 생명주기(Lifecycle) 꼬임을 방지하였고, UI 표시 시 '주어진 전체 탄약량 - 총기 장전분(5발)'을 정확히 계산해 '5 / 예비탄약' 형식으로 출력합니다.
 
+## 12. 스코프(Scope) 확장 및 동적 렌더링 시스템 (2026.03.10 추가)
+* **아이템 데이터 확장 (`ShopItemData.cs` & `ShopItemDataEditor.cs`):**
+    * 기존 상점 아이템 데이터를 여러 분류(`Gun`, `Scope`, `Mag`, `None`)로 나누도록 `ItemCategory` 인덱싱을 추가했습니다.
+    * 카테고리가 `Scope`일 때만 보여지는 커스텀 인스펙터를 구성하여, 줌 배율(`zoomMultiplier`), 안개 거리(`fogStartDistance`, `fogEndDistance`), 배터리 효율 배수(`batteryEfficiencyMultiplier`)를 아이템별로 다르게 지정할 수 있습니다.
+* **조준경 줌 동작 (`CameraController.cs`):**
+    * 장착된 스코프의 `zoomMultiplier` 값에 따라 시야각(FOV)이 자연스럽게 스무딩(Mathf.Lerp)되어 확대/축소됩니다.
+    * 줌 인 상태에서는 마우스 감도(Sensitivity)를 줌 배율만큼 나누어 섬세한 조준이 가능하게 보정했습니다.
+    * **안개 및 렌더링 변경:** 스코프를 장착하고 스테이지에 진입하면, `RenderSettings.fogStartDistance`와 `fogEndDistance`를 즉시 덮어씌워 스코프의 고유 가시거리를 적용합니다.
+    * 배터리 모듈(`StageSelectManager`)과 연동해, 좋은 스코프를 낄수록 배터리의 소모 속도(타이머)가 늦어지는 효율 시스템을 구축했습니다.
+
+## 13. 총기(Gun) 특성 시스템 연동 (2026.03.10 추가)
+* **아이템 데이터 확장 (총기 스탯):**
+    * `ShopItemData`의 카테고리가 `Gun` 일 경우, 데미지(`gunDamage`), 격발 사운드(`shootSound`), 기본 탄창 수(`maxAmmoInClip`), 반동 계수(`recoilUp`, `recoilSide`)를 개별적으로 기입할 수 있습니다.
+* **시스템 연동 적용:**
+    * **사격 로직 (`RaycastShooter.cs`):** 
+        * 스테이지 시작 시 `InventoryManager`를 통해 현재 장착된 '총기 데이터'를 가져와 슈터의 능력치를 덮어씌웁니다 (`InitGunData()`).
+        * 고정되어 있던 데미지가 이제 각 총기가 가진 `gunDamage`(1 또는 2 지정) 파라미터에 맞게 히트박스로 전달되어 섬세한 밸런싱이 가능해졌습니다.
+        * 각 무기 고유의 사운드를 쏠 때마다 `AudioSource`로 출력하며, 예비 탄약 연산 시 총이 지원하는 기본 탄창(`maxAmmoInClip`) 만큼 먼저 빼는 방식으로 완벽하게 장탄수 표기(예: 8 / 22)를 구현했습니다.
+    * **동적 카메라 반동:** 기존의 카메라 숨쉬기/반동 로직(`CameraController.cs`) 위에 총의 `recoilUp`, `recoilSide` 값을 인자로 전달해, 쏘는 총의 종류에 따라 화면이 튀는 파워를 다르게 연출합니다.
+
 ---
 **[다음에 AI를 부르실 때 사용할 프롬프트 예시]**
 "Assets 폴더 최상단에 있는 `NightVisitor_ProjectGuide.md` 문서를 먼저 읽고 현재 프로젝트 진행 상황과 코드 구조를 파악해 줘!"

@@ -15,7 +15,7 @@ public class MenuWindowManager : MonoBehaviour
     public Button shopButton;
 
     [Header("Animation Settings")]
-    public float slideDuration = 0.4f; // 슬라이드 걸리는 시간 (초)
+    public float slideDuration = 0.6f; // 슬라이드 걸리는 시간 (초)
     [Tooltip("화면 폭 (예: 화면 사이즈가 가로 1920이면 1920으로 설정)")]
     public float screenWidth = 1920f; 
 

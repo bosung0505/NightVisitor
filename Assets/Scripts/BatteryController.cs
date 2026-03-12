@@ -34,7 +34,6 @@ public class BatteryController : MonoBehaviour
     
     private float timer = 0f;
     private int currentDepleteIndex = 0;
-    private bool isTransitioning = false;
     private bool isCount1Depleted = false;
     private bool isGameOver = false;
 
@@ -67,7 +66,6 @@ public class BatteryController : MonoBehaviour
         
         timer = 0f;
         currentDepleteIndex = 0;
-        isTransitioning = false;
         isCount1Depleted = false;
         isGameOver = false;
 
@@ -96,6 +94,17 @@ public class BatteryController : MonoBehaviour
         }
         
         Debug.Log("[BatteryController] Battery and Volumes Reset!");
+    }
+
+    public void StopBattery()
+    {
+        isGameOver = true;
+        StopAllCoroutines();
+        // 잔류하는 열화상 등 혹시 모를 볼륨 효과 즉시 차단
+        if (thermalVolume != null) thermalVolume.weight = 0f;
+        if (normalVolume != null) normalVolume.weight = 1f;
+        
+        Debug.Log("[BatteryController] Battery processing stopped (Returned to Map).");
     }
 
     void Update()
@@ -181,8 +190,6 @@ public class BatteryController : MonoBehaviour
 
     private IEnumerator TransitionToNormalVolume()
     {
-        isTransitioning = true;
-        
         // Volume1 활성화 (만약 꺼져있을 경우를 대비)
         if (normalVolume != null && !normalVolume.gameObject.activeInHierarchy)
         {

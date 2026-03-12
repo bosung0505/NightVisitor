@@ -357,6 +357,14 @@ public class KillCountManager : MonoBehaviour
     {
         Debug.Log("[KillCountManager] ShowMissionFailedPanel() Triggered!");
         
+        // 만약 이미 미션 목표를 달성한 상태라면, 자원 고갈 시 실패가 아니라 클리어로 간주합니다.
+        if (isCleared)
+        {
+            Debug.Log("[KillCountManager] Target was already reached. Redirecting to Mission Clear Panel instead.");
+            ShowMissionClearPanel();
+            return;
+        }
+
         // 미션 실패 시 인게임 진행(적 움직임, 탄약, 시간 등)을 모두 정지합니다.
         Time.timeScale = 0f;
 
@@ -404,7 +412,7 @@ public class KillCountManager : MonoBehaviour
         }
 
         // 맵으로 돌아갑니다. StageSelectManager의 인스턴스를 찾아서 복귀 로직을 수행합니다.
-        StageSelectManager ssm = FindObjectOfType<StageSelectManager>();
+        StageSelectManager ssm = FindFirstObjectByType<StageSelectManager>();
         if (ssm != null)
         {
             ssm.ReturnToMap();

@@ -15,6 +15,15 @@ MonoBehaviour:
   itemName: Soso Rifle
   category: 0
   itemIcon: {fileID: 21300000, guid: e933e5532dccbe84eb7a6aeaa81201a0, type: 3}
-  iconSize: {x: 120, y: 80}
-  itemPrice: 49
-  itemDescription: Recoil 10 / reloadable ammunition 5 / Body shot damage 2
+  iconSize: {x: 90, y: 60}
+  itemPrice: 0
+  itemDescription: Recoil 8 / reloadable ammunition 5 / Body shot damage 2
+  gunDamage: 2
+  shootSound: {fileID: 8300000, guid: 6739c01659ad96d47987f4ddee226b36, type: 3}
+  maxAmmoInClip: 6
+  recoilUp: 8
+  recoilSide: 4
+  zoomMultiplier: 1
+  fogStartDistance: 0
+  fogEndDistance: 0
+  batteryEfficiencyMultiplier: 1

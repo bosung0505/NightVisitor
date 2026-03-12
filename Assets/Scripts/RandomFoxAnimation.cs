@@ -23,6 +23,9 @@ public class RandomFoxAnimation : MonoBehaviour
     [Tooltip("여우가 도망칠 때(Escape) 방향을 트는 회전 속도 (낮을수록 천천히, 부드럽게 돕니다)")]
     public float escapeRotationSpeed = 3.0f;
 
+    [Tooltip("스테이지 설정에 의해 Sneak 구간을 건너뛰고 바로 달리는지 여부")]
+    [HideInInspector] public bool ignoreSneakZone = false;
+
     [Header("Health & Damage")]
     [Tooltip("여우의 최대 체력 (기본 2: 꼬리나 몸통 등 Normal 부위는 2방, 머리나 심장 등 Critical 부위는 데미지가 2배라 1방에 즉사)")]
     public int maxHealth = 2;
@@ -363,7 +366,17 @@ public class RandomFoxAnimation : MonoBehaviour
         // Check which zone the fox entered by name to start sneaking or running to hunt
         if (other.name.Contains("SneakZone") && currentState == FoxState.Walk)
         {
-            SetState(FoxState.Sneak);
+            if (ignoreSneakZone)
+            {
+                // Sneak 무시 옵션이 켜져있으면 바로 타겟을 찾고 달리기 시작합니다.
+                FindClosestChicken();
+                SetState(FoxState.Run);
+            }
+            else
+            {
+                // 기존처럼 Sneak 모드로 진입
+                SetState(FoxState.Sneak);
+            }
         }
         else if (other.name.Contains("RunZone") && currentState != FoxState.Run && currentState != FoxState.Jump && currentState != FoxState.Escape)
         {

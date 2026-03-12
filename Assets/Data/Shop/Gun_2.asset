@@ -15,6 +15,15 @@ MonoBehaviour:
   itemName: Good Rifle
   category: 0
   itemIcon: {fileID: 21300000, guid: aaf95fd9e4aa2694e81fe325f9b8fb5f, type: 3}
-  iconSize: {x: 130, y: 75}
-  itemPrice: 99
-  itemDescription: Recoil 8 / reloadable ammunition 8 / Body shot damage 2
+  iconSize: {x: 90, y: 60}
+  itemPrice: 0
+  itemDescription: Recoil 3 / reloadable ammunition 8 / Body shot damage 1
+  gunDamage: 1
+  shootSound: {fileID: 8300000, guid: e11a5a019377fbd4c81caa0adcb4c236, type: 3}
+  maxAmmoInClip: 8
+  recoilUp: 3
+  recoilSide: 1.5
+  zoomMultiplier: 1
+  fogStartDistance: 0
+  fogEndDistance: 0
+  batteryEfficiencyMultiplier: 1

@@ -4,6 +4,8 @@ using TMPro;
 
 public class InventoryManager : MonoBehaviour
 {
+    public static InventoryManager Instance;
+
     [Header("Item Info Panel")]
     public GameObject itemInfoPanel;
 
@@ -38,11 +40,50 @@ public class InventoryManager : MonoBehaviour
 
     private void Awake()
     {
+        if (Instance == null) Instance = this;
+        else if (Instance != this) Destroy(gameObject);
+
         // --- 초기화: 비어있는 상태로 시작 ---
         // Awake에서 가장 먼저 지워둬야, 이후 다른 아이템들의 Start()가 불리면서 덮어씌워질 때 지워지지 않습니다.
         ClearCurrentStatusSlot(ItemCategory.Gun);
         ClearCurrentStatusSlot(ItemCategory.Scope);
         ClearCurrentStatusSlot(ItemCategory.Mag);
+    }
+
+    /// <summary>
+    /// 현재 장착된 스코프의 줌 배율을 반환합니다. (없거나 기본이면 1f)
+    /// </summary>
+    public float GetEquippedZoomMultiplier()
+    {
+        if (equippedScopeUI != null && equippedScopeUI.myItemData != null)
+        {
+            return equippedScopeUI.myItemData.zoomMultiplier;
+        }
+        return 1f;
+    }
+
+    /// <summary>
+    /// 현재 장착된 스코프의 원본 데이터(ShopItemData)를 반환합니다.
+    /// </summary>
+    public ShopItemData GetEquippedScopeData()
+    {
+        if (equippedScopeUI != null)
+        {
+            return equippedScopeUI.myItemData;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 현재 장착된 총기의 원본 데이터(ShopItemData)를 반환합니다.
+    /// </summary>
+    public ShopItemData GetEquippedGunData()
+    {
+        if (equippedGunUI != null)
+        {
+            return equippedGunUI.myItemData;
+        }
+        return null;
     }
 
     private void Start()
@@ -158,6 +199,13 @@ public class InventoryManager : MonoBehaviour
 
         UpdateButtonStates();
         Debug.Log($"[{data.category}] 부위에 {data.itemName} 장착 완료!");
+
+        // 줌 버튼 가시성 실시간 업데이트 (인게임에서 장착 변경 시)
+        if (data.category == ItemCategory.Scope && Camera.main != null)
+        {
+            CameraController camCtrl = Camera.main.GetComponent<CameraController>();
+            if (camCtrl != null) camCtrl.UpdateZoomButtonVisibility();
+        }
     }
 
     private void OnUnequipButtonClicked()
@@ -174,6 +222,13 @@ public class InventoryManager : MonoBehaviour
 
         UpdateButtonStates();
         Debug.Log($"[{data.category}] 장착 해제 완료!");
+
+        // 줌 버튼 가시성 실시간 업데이트 (인게임에서 장착 해제 시 기본스펙으로 줌버튼 끔)
+        if (data.category == ItemCategory.Scope && Camera.main != null)
+        {
+            CameraController camCtrl = Camera.main.GetComponent<CameraController>();
+            if (camCtrl != null) camCtrl.UpdateZoomButtonVisibility();
+        }
     }
 
     // --- 핵심 로직: CurrentStatus 패널 이미지 조작 ---

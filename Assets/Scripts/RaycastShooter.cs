@@ -29,6 +29,7 @@ public class RaycastShooter : MonoBehaviour
     private int currentAmmo;
     private int currentReloadableAmmo;
     private bool isReloading = false;
+    private int currentGunDamage = 1; // 장착된 총기 데미지
 
     [Header("Audio Settings")]
     [Tooltip("격발 사운드")]
@@ -91,6 +92,14 @@ public class RaycastShooter : MonoBehaviour
         // 게임이 일시정지(시간 정지) 된 상태라면 조작 무시
         if (Time.timeScale == 0f) return;
 
+        // -------------------------------------------------------------
+        // [New Touch/Click Mechanic]
+        // 기존의 화면 터치 시 / 빈 화면 우클릭 시 즉발하던 사격 코드를 모두 주석 처리합니다.
+        // 이제부터 사격은 CameraController.cs에서 조준(줌) 상태에서 손을 뗄 때 명시적으로
+        // RaycastShooter.Instance.Shoot() 을 호출하는 방식으로만 작동합니다.
+        // -------------------------------------------------------------
+        
+        /*
 #if ENABLE_INPUT_SYSTEM
         bool isTouching = UnityEngine.InputSystem.Touchscreen.current != null && 
                           UnityEngine.InputSystem.Touchscreen.current.touches.Count > 0 && 
@@ -122,6 +131,7 @@ public class RaycastShooter : MonoBehaviour
             Shoot();
         }
 #endif
+        */
     }
 
     /// <summary>
@@ -138,6 +148,23 @@ public class RaycastShooter : MonoBehaviour
         {
             // 양수(또는 0 제한)라면 해당 스테이지 전용 탄발 수 적용
             currentStageMaxAmmo = customLimit;
+        }
+    }
+
+    /// <summary>
+    /// 상점에서 장착한 총기의 데이터를 받아와 슈터의 기본 능력치를 덮어씌웁니다.
+    /// </summary>
+    public void InitGunData(ShopItemData gunData)
+    {
+        if (gunData != null && gunData.category == ItemCategory.Gun)
+        {
+            currentGunDamage = gunData.gunDamage;
+            maxAmmoPerMag = gunData.maxAmmoInClip;
+            shootSound = gunData.shootSound;
+            recoilUp = gunData.recoilUp;
+            recoilSide = gunData.recoilSide;
+            
+            Debug.Log($"[총기 데이터 갱신] 데미지:{currentGunDamage}, 장탄수:{maxAmmoPerMag}, 반동:{recoilUp}");
         }
     }
 
@@ -229,9 +256,9 @@ public class RaycastShooter : MonoBehaviour
 
             if (hitbox != null)
             {
-                // 히트박스가 부착된 경우 (예: 세팅된 여우) -> 정확히 1의 기본 데미지(부위별 증폭됨)를 전달
-                hitbox.TakeDamage(1, hit.point);
-                Debug.Log($"Hit Hitbox on {hit.collider.name}");
+                // 히트박스가 부착된 경우 (예: 세팅된 여우) -> 총기 고유의 바디샷 데미지(부위별 증폭됨)를 전달
+                hitbox.TakeDamage(currentGunDamage, hit.point);
+                Debug.Log($"Hit Hitbox on {hit.collider.name} with Damage: {currentGunDamage}");
             }
             else
             {

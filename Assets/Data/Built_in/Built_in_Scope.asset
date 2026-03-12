@@ -17,4 +17,14 @@ MonoBehaviour:
   itemIcon: {fileID: 21300000, guid: 89d8a3d89a7b8304e85a578b3a84b1cb, type: 3}
   iconSize: {x: 50, y: 130}
   itemPrice: 0
-  itemDescription: detection distance 100yd / low quality resolution
+  itemDescription: detection distance 100yd / low quality resolution / Battery Efficiency
+    50
+  gunDamage: 1
+  shootSound: {fileID: 0}
+  maxAmmoInClip: 8
+  recoilUp: 2
+  recoilSide: 1
+  zoomMultiplier: 1.5
+  fogStartDistance: 5
+  fogEndDistance: 100
+  batteryEfficiencyMultiplier: 1
