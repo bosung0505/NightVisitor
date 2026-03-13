@@ -15,11 +15,15 @@ public class MenuWindowManager : MonoBehaviour
     public Button shopButton;
 
     [Header("Animation Settings")]
-    public float slideDuration = 0.6f; // 슬라이드 걸리는 시간 (초)
-    [Tooltip("화면 폭 (예: 화면 사이즈가 가로 1920이면 1920으로 설정)")]
-    public float screenWidth = 1920f; 
+    public float slideDuration = 0.4f; // 슬라이드 걸리는 시간 (초)
 
     private int currentIndex = 0; // 현재 열려있는 창의 인덱스 (-1=인벤토리, 0=맵, 1=상점)
+
+    void Awake()
+    {
+        // 모바일 기본값(30fps)을 60fps로 고정하여 UI 애니메이션 끊김 방지
+        Application.targetFrameRate = 60;
+    }
 
     void Start()
     {
@@ -45,13 +49,15 @@ public class MenuWindowManager : MonoBehaviour
         if (!isInstant && targetIndex == currentIndex) return;
         currentIndex = targetIndex;
 
-        // 선택된 창이 정중앙(0)에 오기 위해, 전체 캔버스를 얼마만큼 밀어야 하는지 계산합니다.
-        float globalOffset = -targetIndex * screenWidth;
+        // 실제 기기 해상도를 동적으로 읽어 슬라이드 거리를 계산합니다.
+        // (인스펙터 고정값 대신 Screen.width를 사용하여 모든 기기에서 정확하게 맞춤)
+        float sw = Screen.width;
+        float globalOffset = -targetIndex * sw;
 
         // 각 창이 가야 할 최종 목적지 X좌표를 계산
-        float invTargetX = globalOffset + (-1 * screenWidth);
-        float mapTargetX = globalOffset + (0 * screenWidth);
-        float shopTargetX = globalOffset + (1 * screenWidth);
+        float invTargetX  = globalOffset + (-1 * sw);
+        float mapTargetX  = globalOffset + (0  * sw);
+        float shopTargetX = globalOffset + (1  * sw);
 
         if (isInstant)
         {
@@ -63,9 +69,10 @@ public class MenuWindowManager : MonoBehaviour
         else
         {
             // 부드럽게 슬라이드 애니메이션 (DOTween)
-            if (inventoryWindow != null) inventoryWindow.DOAnchorPosX(invTargetX, slideDuration).SetEase(Ease.OutExpo);
-            if (mapWindow != null) mapWindow.DOAnchorPosX(mapTargetX, slideDuration).SetEase(Ease.OutExpo);
-            if (shopWindow != null) shopWindow.DOAnchorPosX(shopTargetX, slideDuration).SetEase(Ease.OutExpo);
+            // SetUpdate(true): Time.timeScale 영향을 받지 않아 일시정지 중에도 UI 전환 가능
+            if (inventoryWindow != null) inventoryWindow.DOAnchorPosX(invTargetX, slideDuration).SetEase(Ease.OutCubic).SetUpdate(true);
+            if (mapWindow != null)       mapWindow.DOAnchorPosX(mapTargetX,  slideDuration).SetEase(Ease.OutCubic).SetUpdate(true);
+            if (shopWindow != null)      shopWindow.DOAnchorPosX(shopTargetX, slideDuration).SetEase(Ease.OutCubic).SetUpdate(true);
         }
     }
 }

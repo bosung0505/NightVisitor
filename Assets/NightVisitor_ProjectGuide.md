@@ -105,3 +105,79 @@ AI 보조 개발자가 프로젝트 진행 상황을 빠르게 파악하고 맥�
 ---
 **[다음에 AI를 부르실 때 사용할 프롬프트 예시]**
 "Assets 폴더 최상단에 있는 `NightVisitor_ProjectGuide.md` 문서를 먼저 읽고 현재 프로젝트 진행 상황과 코드 구조를 파악해 줘!"
+
+---
+
+## 14. 스코프 UI 이동 방식 (Scope Drag-to-Aim) 구현 (2026.03.13 추가)
+
+기존 캔슬존 드래그 방식에서 완전히 새로운 조준 패러다임으로 전환하였습니다.
+
+### 동작 원리
+```
+[꾹 누름 0.15초] → isAimMode 활성화 (카메라 완전 고정)
+[드래그]          → 카메라 회전 ❌ / 스코프 오버레이 UI만 이동 ✅
+[손 뗌 (캔슬존 밖)] → 스코프 중앙 화면 좌표로 레이캐스트 → 격발
+[손 뗌 (캔슬존 안)] → 격발 없이 줌 해제 (CancelZone 유지)
+[2.5초 초과]       → 자동 줌 해제, 격발 없음
+```
+
+### 스코프 오버레이 UI 구조
+- `Assets/Material/UI/scope_overlay_mask.png`: 검정 배경 + 중앙 투명 타원 구멍이 뚫린 PNG. 화면의 약 3배 크기로 제작하여 드래그해도 검정 영역이 항상 화면을 덮을 수 있게 함.
+- `Scope_Overlay` 오브젝트를 `InGame_Panel` 하위에 배치, 평소 비활성화 상태 유지. 줌 진입 시 자동 활성화되어 화면 중앙에 위치한 뒤 손가락을 따라 이동.
+
+### 주요 코드 변경 (`CameraController.cs`)
+- `scopeOverlayUI` (RectTransform), `scopeDragSensitivity`, `scopeMargin` 변수 추가
+- `MoveScopeUI(Vector2 delta)`: 스코프 이동 + 화면 경계 클램핑
+- `GetScopeScreenCenter()`: 스코프 중앙의 화면 좌표 반환 (레이캐스트 시작점)
+- `EnterAimMode()`: 스코프 UI 활성화 및 중앙(0,0) 초기화
+- `CancelAimMode()`: 스코프 UI 비활성화 및 원위치 복귀
+
+### 주요 코드 변경 (`RaycastShooter.cs`)
+- `ShootAt(Vector2 screenPos)`: 화면 특정 좌표에서 레이를 쏘는 오버로드 추가. `Camera.ScreenPointToRay(screenPos)` 사용. 기존 `Shoot()`의 모든 히트박스/닭/여우/도주 로직을 동일하게 수행.
+
+---
+
+## 15. 코드 성능 최적화 (2026.03.13 추가)
+
+### `RandomChickenAnimation.cs`
+- **SphereCast 타이머 적용:** `Update()` 내 매 프레임 실행되던 `Physics.SphereCast` 장애물 검사를 `obstacleCheckTimer`를 도입해 **0.1초 간격**으로만 실행되도록 변경. 닭 이동 속도(1m/s)상 체감 차이 없음.
+- **string GC 제거:** `hit.collider.gameObject.name.ToLower().Contains("fence")` → `hit.collider.CompareTag("Fence")`로 교체. 매 프레임 문자열 생성에 의한 GC 할당 제거.
+
+### `RandomFoxAnimation.cs`
+- **`agent.SetDestination` 호출 제한 (Walk/Sneak):** Walk·Sneak 상태는 목적지(HuntingZone 중심)가 고정이므로 `destUpdateTimer`를 도입해 **0.2초 간격**으로만 NavMesh 경로 재계산 요청. Run·Escape 상태는 정확도를 위해 매 프레임 유지.
+- **string GC 제거:** `CheckForFenceJump()` 내 `hitName.Contains("fence")` → `CompareTag("Fence")`로 교체.
+
+---
+
+## 16. 줌 활성화 신뢰성 버그 수정 (2026.03.13 추가)
+
+### 증상
+- 같은 곳을 눌러도 줌이 0.15초 만에 켜질 때도 있고, 3초가 걸리거나 아예 안 되는 현상
+
+### 원인
+- 스마트폰에서 손가락이 정지 상태에서도 수 픽셀씩 자연스럽게 흔들림
+- `touchStationaryThreshold(20px)`를 초과하면 `isPanning = true`가 되어 `touchHoldTime` 누적 경로 자체가 영구 차단됨
+
+### 수정 내용 (`CameraController.cs`)
+```csharp
+// 수정 전
+if (!isAimMode && dist > touchStationaryThreshold) isPanning = true;
+
+// 수정 후: holdThreshold 시간 전에는 임계값을 2.5배 적용
+float panThreshold = (touchHoldTime < holdThreshold)
+    ? touchStationaryThreshold * 2.5f   // 줌 대기 중: 50px 이상 밀어야 패닝
+    : touchStationaryThreshold;          // 줌 후: 기존 20px
+if (!isAimMode && dist > panThreshold) isPanning = true;
+```
+New Input System 터치, Legacy 터치, 마우스 3가지 입력 경로 모두에 동일하게 적용.
+
+---
+
+## 17. 스테이지 포기(StageGiveUp) 버튼 연결 (2026.03.13 추가)
+
+- `InGame_Panel → Mission → StageGiveUp_BT` 버튼의 OnClick에 `KillCountManager.ShowMissionFailedPanel()`을 연결.
+- 미션 목표 달성 전에 누르면 실패 패널이 뜨고, 이미 목표를 달성한 상태라면 자동으로 클리어 패널로 전환됨. 결산(골드 정산 포함) 및 맵 복귀 처리는 기존 로직 그대로 재활용.
+
+---
+**[다음에 AI를 부르실 때 사용할 프롬프트 예시]**
+"Assets 폴더 최상단에 있는 `NightVisitor_ProjectGuide.md` 문서를 먼저 읽고 현재 프로젝트 진행 상황과 코드 구조를 파악해 줘!"
