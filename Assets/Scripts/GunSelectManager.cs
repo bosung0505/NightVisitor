@@ -8,11 +8,11 @@ using UnityEngine.Rendering;
 public class GunSelectManager : MonoBehaviour
 {
     [Header("Gun Select UI Elements")]
-    public CanvasGroup gunSelectPanel; 
-    
+    public CanvasGroup gunSelectPanel;
+
     [Header("Gun Buttons and Selection Images")]
     public Button gun1Button;
-    public GameObject image1; 
+    public GameObject image1;
 
     public Button gun2Button;
     public GameObject image2;
@@ -23,17 +23,19 @@ public class GunSelectManager : MonoBehaviour
     [Header("Countdown Settings")]
     public TextMeshProUGUI countdownText;
     public int countdownSeconds = 10;
-    
+
     [Header("In-Game Transition Targets")]
-    public CanvasGroup inGameUIPanel; 
-    public Volume volumeStart; // (이제 Priority를 1 줘서 사용, Global은 항상 켜져 있음)
+    public CanvasGroup inGameUIPanel;
     public float transitionDuration = 1.0f;
+
+    // ★ [수정됨] 인스펙터 참조 대신, StageSelectManager가 넘겨주는 볼륨을 담을 프라이빗 변수
+    private Volume currentVolumeStart;
 
     [Header("Game Elements To Pause")]
     [Tooltip("All animal AI and systems in the IN_GAME object that must wait for the countdown")]
     public GameObject inGameEnvironment;
 
-    private int selectedGunIndex = 1; 
+    private int selectedGunIndex = 1;
     private Coroutine countdownCoroutine;
 
     void Start()
@@ -53,19 +55,23 @@ public class GunSelectManager : MonoBehaviour
         SelectGun(1);
     }
 
-    public void PrepareGunSelection()
+    // ★ [수정됨] StageSelectManager가 맵을 생성하면서 맵의 볼륨을 매개변수로 던져줍니다.
+    public void PrepareGunSelection(Volume mapVolume = null)
     {
+        // 건네받은 볼륨을 저장!
+        currentVolumeStart = mapVolume;
+
         // --- 재시작(새 스테이지) 초기화 로직 (로딩 직후 즉시 호출됨) ---
         Time.timeScale = 0f; // 시간 정지!
-        
+
         if (inGameUIPanel != null)
         {
             inGameUIPanel.alpha = 0f;
             inGameUIPanel.gameObject.SetActive(false);
         }
-        
+
         // Priority 1인 덮어쓰기용 볼륨을 100% 켬 (게임이 켜지자마자 번쩍이는 현상 방지)
-        if (volumeStart != null) volumeStart.weight = 1f;
+        if (currentVolumeStart != null) currentVolumeStart.weight = 1f;
         // ----------------------------------------------------------------------
     }
 
@@ -90,7 +96,7 @@ public class GunSelectManager : MonoBehaviour
         if (image1 != null) image1.SetActive(gunIndex == 1);
         if (image2 != null) image2.SetActive(gunIndex == 2);
         if (image3 != null) image3.SetActive(gunIndex == 3);
-        
+
         Debug.Log("Selected Gun: " + gunIndex);
     }
 
@@ -117,9 +123,9 @@ public class GunSelectManager : MonoBehaviour
         {
             gunSelectPanel.interactable = false;
             gunSelectPanel.blocksRaycasts = false;
-            
+
             // 패널이 사라지는 이펙트가 '완전히 끝마친 직후' OnComplete를 통해 다음 절차를 실행합니다.
-            gunSelectPanel.DOFade(0f, transitionDuration).SetUpdate(true).OnComplete(() => 
+            gunSelectPanel.DOFade(0f, transitionDuration).SetUpdate(true).OnComplete(() =>
             {
                 ActivateInGameLogic();
             });
@@ -144,9 +150,10 @@ public class GunSelectManager : MonoBehaviour
 
         // 3. 덮어씌워둔 Volume_Start의 껍질만 서서히 치웁니다.
         // 그러면 자연스럽게 항상 켜져있던(Priority 0) Global Volume의 원본 색감이 100% 드러납니다!
-        if (volumeStart != null)
+        // ★ [수정됨] 저장해둔 currentVolumeStart의 무게를 줄입니다.
+        if (currentVolumeStart != null)
         {
-            DOTween.To(() => volumeStart.weight, x => volumeStart.weight = x, 0f, transitionDuration);
+            DOTween.To(() => currentVolumeStart.weight, x => currentVolumeStart.weight = x, 0f, transitionDuration);
         }
 
         gameObject.SetActive(false);
