@@ -37,15 +37,50 @@ public struct StageConfig
     public int maxReloadableAmmo;
 }
 
+[System.Serializable]
+public struct StageConfig2
+{
+    [Tooltip("해당 스테이지의 플레이 버튼")]
+    public Button playButton;
+
+    [Header("Map Settings")]
+    [Tooltip("이 스테이지에서 생성할 맵 프리팹")]
+    public GameObject mapPrefab;
+
+    [Header("Stage Rules")]
+    [Tooltip("이 스테이지의 목표 킬 수")]
+    public int targetKillCount;
+
+    [Header("Difficulty Settings")]
+    [Tooltip("활성화할 디코이 여우 이름들")]
+    public string[] activeDecoyNames;
+    [Tooltip("배터리 소모 속도 배수 (기본 1.0)")]
+    public float batteryDepleteRate;
+    [Tooltip("총 예비 탄약 수 (음수면 기본 유지)")]
+    public int maxReloadableAmmo;
+
+    [Header("Camera Settings (Map 2 Only)")]
+    [Tooltip("카메라 시작 위치 및 회전 (빈 오브젝트 할당)")]
+    public Transform cameraSpawnPoint;
+    [Tooltip("상하 회전 제한 (X축: 최소, Y축: 최대)")]
+    public Vector2 pitchLimit;
+    [Tooltip("좌우 회전 제한 (X축: 최소, Y축: 최대)")]
+    public Vector2 yawLimit;
+}
+
 public class StageSelectManager : MonoBehaviour
 {
     [Header("UI Panels")]
     public CanvasGroup mapStagePanel;
+    public CanvasGroup mapStagePanel2; // Map 2용 스테이지 패널 추가
     public CanvasGroup inGamePanel;
     public CanvasGroup gunSelectPanel;
 
-    [Header("Stage Configurations")]
+    [Header("Stage Configurations (Map 1)")]
     public StageConfig[] stageConfigs;
+
+    [Header("Stage Configurations (Map 2 - Simplified)")]
+    public StageConfig2[] stageConfigs2;
 
     [Header("InGame UI References")]
     public TextMeshProUGUI ingameTargetKillCountText;
@@ -53,8 +88,9 @@ public class StageSelectManager : MonoBehaviour
     [Header("Transition Settings")]
     public float fadeDuration = 0.5f;
 
-    // --- 동적으로 생성될 맵을 추적하는 변수 ---
+    // --- 상태 추적 변수 ---
     private GameObject currentInstantiatedMap;
+    private CanvasGroup lastActiveStagePanel; // 마지막으로 열려있던 스테이지 패널 기억
 
     private float originalFogStart;
     private float originalFogEnd;
@@ -64,13 +100,23 @@ public class StageSelectManager : MonoBehaviour
         originalFogStart = RenderSettings.fogStartDistance;
         originalFogEnd = RenderSettings.fogEndDistance;
 
-        // 버튼 이벤트 연결 (람다 캡처 문제 방지를 위해 로컬 변수로 복사 후 전달)
+        // Map 1 버튼 연결
         foreach (StageConfig config in stageConfigs)
         {
             if (config.playButton != null)
             {
                 StageConfig capturedConfig = config;
                 config.playButton.onClick.AddListener(() => OnPlayStageClicked(capturedConfig));
+            }
+        }
+
+        // Map 2 버튼 연결
+        foreach (StageConfig2 config in stageConfigs2)
+        {
+            if (config.playButton != null)
+            {
+                StageConfig2 capturedConfig = config;
+                config.playButton.onClick.AddListener(() => OnPlayStage2Clicked(capturedConfig));
             }
         }
 
@@ -87,15 +133,50 @@ public class StageSelectManager : MonoBehaviour
         }
     }
 
-    // 통째로 받은 Config 데이터를 바탕으로 게임 시작!
+    // Map 1 실행용
     public void OnPlayStageClicked(StageConfig config)
     {
-        // 1. 패널 페이드
-        if (mapStagePanel != null)
+        lastActiveStagePanel = mapStagePanel; // Map 1 패널 기억
+        
+        // Map 1은 기본 카메라 위치와 기본 제한(-70~70, -80~80)을 그대로 사용
+        Vector2 defaultPitch = new Vector2(-70f, 70f);
+        Vector2 defaultYaw = new Vector2(-80f, 80f);
+
+        StartGame(config.mapPrefab, config.targetKillCount, config.foxSpawnInterval, config.maxConcurrentFoxes, 
+                  config.activeSpawnPointNames, config.activeDecoyNames, config.ignoreSneakZone, 
+                  config.batteryDepleteRate, config.maxReloadableAmmo, null, defaultPitch, defaultYaw);
+    }
+
+    // Map 2 실행용
+    public void OnPlayStage2Clicked(StageConfig2 config)
+    {
+        lastActiveStagePanel = mapStagePanel2; // Map 2 패널 기억
+        
+        float defaultSpawnInterval = 5f;
+        int defaultMaxFoxes = 1;
+        string[] defaultSpawnPoints = null;
+        bool defaultIgnoreSneak = false;
+
+        // 인스펙터에서 0으로 초기화되어 있을 경우를 대비한 안전 예외 처리
+        Vector2 pLimit = config.pitchLimit == Vector2.zero ? new Vector2(-70f, 70f) : config.pitchLimit;
+        Vector2 yLimit = config.yawLimit == Vector2.zero ? new Vector2(-80f, 80f) : config.yawLimit;
+
+        StartGame(config.mapPrefab, config.targetKillCount, defaultSpawnInterval, defaultMaxFoxes, 
+                  defaultSpawnPoints, config.activeDecoyNames, defaultIgnoreSneak, 
+                  config.batteryDepleteRate, config.maxReloadableAmmo, config.cameraSpawnPoint, pLimit, yLimit);
+    }
+
+    // 통합 게임 시작 로직
+    private void StartGame(GameObject mapPrefab, int targetKillCount, float foxSpawnInterval, int maxConcurrentFoxes, 
+                           string[] activeSpawnPointNames, string[] activeDecoyNames, bool ignoreSneakZone, 
+                           float batteryDepleteRate, int maxReloadableAmmo, Transform camSpawn = null, Vector2 pLimit = default, Vector2 yLimit = default)
+    {
+        // 1. 패널 페이드 (마지막에 활성화되었던 패널을 끕니다)
+        if (lastActiveStagePanel != null)
         {
-            mapStagePanel.DOFade(0f, fadeDuration).SetUpdate(true).OnComplete(() =>
+            lastActiveStagePanel.DOFade(0f, fadeDuration).SetUpdate(true).OnComplete(() =>
             {
-                mapStagePanel.gameObject.SetActive(false);
+                lastActiveStagePanel.gameObject.SetActive(false);
             });
         }
         if (inGamePanel != null)
@@ -119,7 +200,7 @@ public class StageSelectManager : MonoBehaviour
         if (currentInstantiatedMap != null) Destroy(currentInstantiatedMap);
 
         // 프리팹을 진짜 화면에 생성합니다. (이 순간 닭과 디코이가 원본 그대로 완벽하게 복원됩니다)
-        currentInstantiatedMap = Instantiate(config.mapPrefab);
+        currentInstantiatedMap = Instantiate(mapPrefab);
 
         // 생성된 맵에서 MapInfo 스크립트를 뽑아옵니다.
         MapInfo currentMapInfo = currentInstantiatedMap.GetComponent<MapInfo>();
@@ -127,7 +208,7 @@ public class StageSelectManager : MonoBehaviour
         // 맵에 있는 디코이들 중 이번 스테이지 규칙에 맞는 녀석들만 켭니다.
         if (currentMapInfo != null)
         {
-            currentMapInfo.SetupDecoys(config.activeDecoyNames);
+            currentMapInfo.SetupDecoys(activeDecoyNames);
         }
 
         // =========================================================
@@ -135,7 +216,7 @@ public class StageSelectManager : MonoBehaviour
         // 탄약 및 무기 세팅
         if (RaycastShooter.Instance != null)
         {
-            int ammoLimit = config.maxReloadableAmmo;
+            int ammoLimit = maxReloadableAmmo;
             RaycastShooter.Instance.InitAmmoLimit(ammoLimit);
 
             if (InventoryManager.Instance != null)
@@ -151,7 +232,7 @@ public class StageSelectManager : MonoBehaviour
         // 킬 수 UI 및 미션 세팅
         if (ingameTargetKillCountText != null)
         {
-            ingameTargetKillCountText.text = config.targetKillCount.ToString();
+            ingameTargetKillCountText.text = targetKillCount.ToString();
         }
 
         if (KillCountManager.Instance == null)
@@ -160,7 +241,7 @@ public class StageSelectManager : MonoBehaviour
         if (KillCountManager.Instance != null)
         {
             if (!KillCountManager.Instance.gameObject.activeSelf) KillCountManager.Instance.gameObject.SetActive(true);
-            KillCountManager.Instance.InitMission(config.targetKillCount);
+            KillCountManager.Instance.InitMission(targetKillCount);
         }
 
         // =========================================================
@@ -168,18 +249,18 @@ public class StageSelectManager : MonoBehaviour
         // =========================================================
         if (FoxManager.Instance != null && currentMapInfo != null)
         {
-            int maxFoxes = config.maxConcurrentFoxes <= 0 ? 1 : config.maxConcurrentFoxes;
+            int mFoxes = maxConcurrentFoxes <= 0 ? 1 : maxConcurrentFoxes;
 
             // MapInfo에게 "이번 스테이지 스폰 포인트 이름록 줄 테니까 실제 좌표(Transform)로 바꿔와!" 라고 시킵니다.
-            Transform[] currentStageSpawnPoints = currentMapInfo.GetActiveSpawnPoints(config.activeSpawnPointNames);
+            Transform[] currentStageSpawnPoints = currentMapInfo.GetActiveSpawnPoints(activeSpawnPointNames);
 
-            FoxManager.Instance.InitStage(config.foxSpawnInterval, currentStageSpawnPoints, maxFoxes, config.ignoreSneakZone);
+            FoxManager.Instance.InitStage(foxSpawnInterval, currentStageSpawnPoints, mFoxes, ignoreSneakZone);
         }
 
         // 배터리 세팅
         if (BatteryController.Instance != null)
         {
-            float batteryRate = config.batteryDepleteRate <= 0.1f ? 1.0f : config.batteryDepleteRate;
+            float batteryRate = batteryDepleteRate <= 0.1f ? 1.0f : batteryDepleteRate;
             if (InventoryManager.Instance != null)
             {
                 ShopItemData equippedScope = InventoryManager.Instance.GetEquippedScopeData();
@@ -223,6 +304,16 @@ public class StageSelectManager : MonoBehaviour
                 if (gunManager != null) gunManager.StartGunSelection();
             });
         }
+
+        // 카메라 위치 및 제한 적용
+        if (Camera.main != null)
+        {
+            CameraController camController = Camera.main.GetComponent<CameraController>();
+            if (camController != null)
+            {
+                camController.SetCameraPoseAndLimits(camSpawn, pLimit, yLimit);
+            }
+        }
     }
 
     /// <summary>
@@ -253,10 +344,10 @@ public class StageSelectManager : MonoBehaviour
             });
         }
 
-        if (mapStagePanel != null)
+        if (lastActiveStagePanel != null)
         {
-            mapStagePanel.gameObject.SetActive(true);
-            mapStagePanel.DOFade(1f, fadeDuration).SetUpdate(true);
+            lastActiveStagePanel.gameObject.SetActive(true);
+            lastActiveStagePanel.DOFade(1f, fadeDuration).SetUpdate(true);
         }
 
         if (BatteryController.Instance != null) BatteryController.Instance.StopBattery();

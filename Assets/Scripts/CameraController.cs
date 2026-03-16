@@ -19,6 +19,10 @@ public class CameraController : MonoBehaviour
     private Vector3 currentRecoilOffset;
     private Vector3 targetRecoilOffset;
 
+    [Header("Rotation Limits")]
+    public Vector2 pitchLimit = new Vector2(-70f, 70f);
+    public Vector2 yawLimit = new Vector2(-80f, 80f);
+
     [Header("Idle Breathing")]
     [Tooltip("호흡 속도")]
     public float breathSpeed = 1.5f;
@@ -204,8 +208,8 @@ public class CameraController : MonoBehaviour
 #endif
         yaw += mx;
         pitch -= my;
-        pitch = Mathf.Clamp(pitch, -70f, 70f);
-        yaw = Mathf.Clamp(yaw, -80f, 80f);
+        pitch = Mathf.Clamp(pitch, pitchLimit.x, pitchLimit.y);
+        yaw = Mathf.Clamp(yaw, yawLimit.x, yawLimit.y);
     }
 
     private void ResetTouchState()
@@ -303,8 +307,8 @@ public class CameraController : MonoBehaviour
                     float sens = panSpeed / currentZoomMultiplier;
                     yaw   += mdelta.x * sens * Time.unscaledDeltaTime * 0.05f;
                     pitch -= mdelta.y * sens * Time.unscaledDeltaTime * 0.05f;
-                    pitch = Mathf.Clamp(pitch, -70f, 70f);
-                    yaw   = Mathf.Clamp(yaw,   -80f, 80f);
+                    pitch = Mathf.Clamp(pitch, pitchLimit.x, pitchLimit.y);
+                    yaw   = Mathf.Clamp(yaw,   yawLimit.x, yawLimit.y);
                 }
                 else if (touchState == TouchState.Zooming)
                 {
@@ -354,8 +358,8 @@ public class CameraController : MonoBehaviour
                 {
                     yaw += mdelta.x;
                     pitch -= mdelta.y;
-                    pitch = Mathf.Clamp(pitch, -70f, 70f);
-                    yaw = Mathf.Clamp(yaw, -80f, 80f);
+                    pitch = Mathf.Clamp(pitch, pitchLimit.x, pitchLimit.y);
+                    yaw = Mathf.Clamp(yaw, yawLimit.x, yawLimit.y);
                 }
                 else if (touchState == TouchState.Zooming)
                 {
@@ -447,5 +451,33 @@ public class CameraController : MonoBehaviour
         ResetTouchState();
         if (cam != null) cam.fieldOfView = defaultFOV;
         if (scopeVolume != null) scopeVolume.weight = 0f;
+    }
+
+    /// <summary>
+    /// 외부(StageSelectManager 등)에서 카메라의 위치, 회전, 그리고 회전 제한을 한 번에 설정합니다.
+    /// </summary>
+    public void SetCameraPoseAndLimits(Transform spawnPoint, Vector2 pLimit, Vector2 yLimit)
+    {
+        // 1. 위치 및 회전 적용
+        if (spawnPoint != null)
+        {
+            transform.position = spawnPoint.position;
+            transform.rotation = spawnPoint.rotation;
+        }
+
+        // 2. 내부 변수(pitch, yaw) 동기화
+        Vector3 rot = transform.eulerAngles;
+        pitch = rot.x > 180f ? rot.x - 360f : rot.x;
+        yaw = rot.y > 180f ? rot.y - 360f : rot.y;
+
+        // 3. 제한 각도 적용
+        pitchLimit = pLimit;
+        yawLimit = yLimit;
+
+        // 4. 상태 초기화
+        currentRecoilOffset = Vector3.zero;
+        targetRecoilOffset = Vector3.zero;
+        
+        Debug.Log($"[CAM] Pose & Limits Reset: Pos={transform.position}, Rot={rot}, PitchRange={pLimit}, YawRange={yLimit}");
     }
 }

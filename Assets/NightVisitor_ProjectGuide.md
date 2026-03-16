@@ -179,5 +179,19 @@ New Input System 터치, Legacy 터치, 마우스 3가지 입력 경로 모두�
 - 미션 목표 달성 전에 누르면 실패 패널이 뜨고, 이미 목표를 달성한 상태라면 자동으로 클리어 패널로 전환됨. 결산(골드 정산 포함) 및 맵 복귀 처리는 기존 로직 그대로 재활용.
 
 ---
+
+## 18. 다중 맵 스테이지 관리 및 카메라 커스텀 시스템 (2026.03.16 추가)
+
+### 다중 맵 확장 지원 (`StageSelectManager.cs`)
+* **개별 스테이지 구성**: 기존 `StageConfigs` 외에 Map 2를 위한 **`StageConfigs2`** 배열을 추가했습니다. Map 2는 테스트의 편의를 위해 딱 필요한 6가지 핵심 필드(`Play Button`, `Map Prefab`, `Target Kill Count`, `Active Decoy Names`, `Battery Deplete Rate`, `Max Reloadable Ammo`)만 사용하여 관리하도록 이원화했습니다.
+* **유연한 패널 전환**: Map 2 전용 스테이지 선택창인 **`mapStagePanel2`** 필드를 추가했습니다. `lastActiveStagePanel` 상태 변수를 도입해, 어떤 맵에서 게임을 시작했느냐에 따라 해당 패널이 부드럽게 사라지고(Fade-out), 게임 종료 후 원래 있던 맵의 선택창으로 정확히 복귀(Fade-in)하도록 로직을 통합 관리합니다.
+
+### 스테이지별 카메라 커스텀 (`CameraController.cs` & `StageSelectManager.cs`)
+* **동적 회전 제한**: 하드코딩되어 있던 상하(-70~70)/좌우(-80~80) 회전 제한 각도를 변수화(`pitchLimit`, `yawLimit`)하여 외부에서 동적으로 조절할 수 있게 개선했습니다.
+* **위치 및 각도 초기화**: `SetCameraPoseAndLimits()` 함수를 통해 스테이지 시작 시 카메라를 특정 위치(`Transform`)로 옮기고, 각도와 회전 제한을 즉시 갱신합니다.
+* **Map 2 특화 설정**: `StageConfig2`에 카메라 시작 포인트와 상하/좌우 제한 각도 필드를 추가하여, Map 2의 각 스테이지마다 사격 위치와 시야 범위를 다르게 연출할 수 있습니다. 
+* **하위 호환성 유지**: Map 1 플레이 시에는 별도의 설정 없이도 기존의 카메라 위치와 기본 제한 각도를 사용하도록 예외 처리를 정교하게 구성했습니다.
+
+---
 **[다음에 AI를 부르실 때 사용할 프롬프트 예시]**
 "Assets 폴더 최상단에 있는 `NightVisitor_ProjectGuide.md` 문서를 먼저 읽고 현재 프로젝트 진행 상황과 코드 구조를 파악해 줘!"
