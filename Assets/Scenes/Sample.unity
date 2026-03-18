@@ -832,7 +832,27 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   panSpeed: 180
+  touchPanSpeed: 5
   useWorldSpace: 0
+  snappiness: 6
+  returnSpeed: 2
+  pitchLimit: {x: -70, y: 70}
+  yawLimit: {x: -80, y: 80}
+  breathSpeed: 1.5
+  breathAmount: 0.5
+  zoomLerpSpeed: 10
+  scopeVolume: {fileID: 0}
+  zoomButton: {fileID: 0}
+  cancelZoneUI: {fileID: 0}
+  crosshairImage: {fileID: 0}
+  normalCrosshairColor: {r: 1, g: 1, b: 1, a: 1}
+  cancelCrosshairColor: {r: 1, g: 0, b: 0, a: 1}
+  scopeOverlayUI: {fileID: 0}
+  scopeDragSensitivity: 1
+  scopeMargin: {x: 80, y: 120}
+  zoomTimeScale: 0.5
+  holdThreshold: 0.15
+  dragSpeedThreshold: 0.02
 --- !u!114 &330585549
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -845,7 +865,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 65a3a1f0e4f391242895a03fd76c2a8f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  maxAmmoPerMag: 5
+  maxReloadableAmmo: 30
+  shootSound: {fileID: 0}
+  reloadSound: {fileID: 0}
+  emptyClickSound: {fileID: 0}
+  currentAmmoText: {fileID: 0}
+  reloadableAmmoText: {fileID: 0}
+  reloadButton: {fileID: 0}
   fleeRadius: 15
+  recoilUp: 2
+  recoilSide: 1
 --- !u!1 &337069320
 GameObject:
   m_ObjectHideFlags: 0
@@ -986,6 +1016,13 @@ MonoBehaviour:
   rotationSpeed: 2
   fleeSpeedMultiplier: 2.5
   fleeDuration: 4.5
+  boundaryCenter: {fileID: 0}
+  maxRadius: 15
+  obstacleCheckDistance: 2
+  obstacleLayerMask:
+    serializedVersion: 2
+    m_Bits: 0
+  flapAudioSource: {fileID: 0}
 --- !u!95 &355520698
 Animator:
   serializedVersion: 7
@@ -1493,6 +1530,13 @@ MonoBehaviour:
   rotationSpeed: 2
   fleeSpeedMultiplier: 2.5
   fleeDuration: 4.5
+  boundaryCenter: {fileID: 0}
+  maxRadius: 15
+  obstacleCheckDistance: 2
+  obstacleLayerMask:
+    serializedVersion: 2
+    m_Bits: 0
+  flapAudioSource: {fileID: 0}
 --- !u!95 &592056617
 Animator:
   serializedVersion: 7
@@ -4418,6 +4462,7 @@ GameObject:
   - component: {fileID: 919132148040626416}
   - component: {fileID: 919132148040626417}
   - component: {fileID: 919132148040626418}
+  - component: {fileID: 919132148040626419}
   m_Layer: 0
   m_Name: Fox_001
   m_TagString: Untagged
@@ -4481,14 +4526,29 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   huntingZoneCenter: {fileID: 0}
+  catchChickenObj: {fileID: 0}
   walkSpeed: 1.2
   sneakSpeed: 0.8
   runSpeed: 5
   fleeSpeedMultiplier: 2.5
-  rotationSpeed: 2
+  escapeSpeedMultiplier: 1.5
+  escapeRotationSpeed: 3
+  ignoreSneakZone: 0
+  maxHealth: 2
   jumpDuration: 1.5
+  jumpAnticipationTime: 0.3
+  jumpMoveTime: 0.8
+  jumpCooldown: 2
   fleeDuration: 4
+  catchWaitDuration: 0.5
+  catchDistance: 1.5
+  escapeDisappearDistance: 40
   currentState: 0
+  jumpTriggerDistance: 2.5
+  obstacleLayerMask:
+    serializedVersion: 2
+    m_Bits: 0
+  raycastHeightOffset: 0.5
 --- !u!54 &919132148040626418
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -4516,6 +4576,28 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 112
   m_CollisionDetection: 0
+--- !u!195 &919132148040626419
+NavMeshAgent:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 919132148040626414}
+  m_Enabled: 1
+  m_AgentTypeID: 0
+  m_Radius: 0.5
+  m_Speed: 3.5
+  m_Acceleration: 8
+  avoidancePriority: 50
+  m_AngularSpeed: 120
+  m_StoppingDistance: 0
+  m_AutoTraverseOffMeshLink: 1
+  m_AutoBraking: 1
+  m_AutoRepath: 1
+  m_Height: 2
+  m_BaseOffset: 0
+  m_WalkableMask: 4294967295
+  m_ObstacleAvoidanceType: 4
 --- !u!1 &978750694952147685
 GameObject:
   m_ObjectHideFlags: 0
@@ -5878,6 +5960,13 @@ MonoBehaviour:
   rotationSpeed: 2
   fleeSpeedMultiplier: 2.5
   fleeDuration: 4
+  boundaryCenter: {fileID: 0}
+  maxRadius: 15
+  obstacleCheckDistance: 2
+  obstacleLayerMask:
+    serializedVersion: 2
+    m_Bits: 0
+  flapAudioSource: {fileID: 0}
 --- !u!65 &4305072684147030525
 BoxCollider:
   m_ObjectHideFlags: 0

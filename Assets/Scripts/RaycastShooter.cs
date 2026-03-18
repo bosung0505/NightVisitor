@@ -293,14 +293,23 @@ public class RaycastShooter : MonoBehaviour
                         decoyAnim.StopAnimation();
                     }
 
-                    // Trigger the "Die" parameter
-                    animator.SetTrigger("Die");
-                    Debug.Log("Hit " + hit.collider.name + " and triggered Die animation.");
-                    
-                    // --- [신규 로직] 우측 상단 킬 정보 UI 갱신 (히트박스가 없는 동물을 쐈을 때) ---
-                    if (KillCountManager.Instance != null && (foxAnim != null || decoyAnim != null))
+                    MonsterAI monsterAnim = animator.GetComponent<MonsterAI>();
+                    if (monsterAnim != null)
                     {
-                        KillCountManager.Instance.AddKill();
+                        // 괴물은 즉사가 아니라 자체 TakeDamage 로직 분기를 사용
+                        monsterAnim.TakeDamage(currentGunDamage, hit.point);
+                    }
+                    else
+                    {
+                        // Trigger the "Die" parameter
+                        animator.SetTrigger("Die");
+                        Debug.Log("Hit " + hit.collider.name + " and triggered Die animation.");
+                        
+                        // --- [신규 로직] 우측 상단 킬 정보 UI 갱신 (히트박스가 없는 동물을 쐈을 때) ---
+                        if (KillCountManager.Instance != null && (foxAnim != null || decoyAnim != null))
+                        {
+                            KillCountManager.Instance.AddKill();
+                        }
                     }
                 }
                 else
@@ -342,6 +351,10 @@ public class RaycastShooter : MonoBehaviour
                 {
                     decoyFox.FleeFrom(hit.point);
                 }
+
+                MonsterAI monster = nearby.GetComponent<MonsterAI>();
+                if (monster == null) monster = nearby.GetComponentInParent<MonsterAI>();
+                if (monster != null) monster.FleeFrom(hit.point);
             }
         }
     }
@@ -411,10 +424,18 @@ public class RaycastShooter : MonoBehaviour
                     DecoyFoxAI decoyAnim = animator.GetComponent<DecoyFoxAI>();
                     if (decoyAnim != null) decoyAnim.StopAnimation();
 
-                    animator.SetTrigger("Die");
+                    MonsterAI monsterAnim = animator.GetComponent<MonsterAI>();
+                    if (monsterAnim != null)
+                    {
+                        monsterAnim.TakeDamage(currentGunDamage, hit.point);
+                    }
+                    else
+                    {
+                        animator.SetTrigger("Die");
 
-                    if (KillCountManager.Instance != null && (foxAnim != null || decoyAnim != null))
-                        KillCountManager.Instance.AddKill();
+                        if (KillCountManager.Instance != null && (foxAnim != null || decoyAnim != null))
+                            KillCountManager.Instance.AddKill();
+                    }
                 }
             }
 
@@ -433,6 +454,10 @@ public class RaycastShooter : MonoBehaviour
                 DecoyFoxAI decoyFox = nearby.GetComponent<DecoyFoxAI>();
                 if (decoyFox == null) decoyFox = nearby.GetComponentInParent<DecoyFoxAI>();
                 if (decoyFox != null) decoyFox.FleeFrom(hit.point);
+
+                MonsterAI monster = nearby.GetComponent<MonsterAI>();
+                if (monster == null) monster = nearby.GetComponentInParent<MonsterAI>();
+                if (monster != null) monster.FleeFrom(hit.point);
             }
         }
     }
