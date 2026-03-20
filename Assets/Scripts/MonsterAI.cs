@@ -27,17 +27,6 @@ public class MonsterAI : MonoBehaviour
     {
         animator = GetComponent<Animator>();
         agent = GetComponent<NavMeshAgent>();
-
-        // 메인 카메라 타겟팅 (플레이어 방향)
-        if (Camera.main != null)
-        {
-            targetCamera = Camera.main.transform;
-        }
-        else
-        {
-            GameObject camObj = GameObject.FindGameObjectWithTag("MainCamera");
-            if(camObj != null) targetCamera = camObj.transform;
-        }
         
         timer = wanderTimer;
         
@@ -46,8 +35,8 @@ public class MonsterAI : MonoBehaviour
 
     void Update()
     {
-        // 죽었거나, 리액션 중이거나, 타겟이 없으면 이동 로직 무시
-        if (isDead || isReacting || targetCamera == null || agent == null) return;
+        // 죽었거나, 리액션 중이거나, 요원이 없으면 이동 로직 전체 무시
+        if (isDead || isReacting || agent == null) return;
 
         if (hitCount == 0)
         {
@@ -57,7 +46,7 @@ public class MonsterAI : MonoBehaviour
             {
                 // 랜덤한 위치로 이동
                 Vector3 newPos = RandomNavSphere(transform.position, wanderRadius, -1);
-                agent.SetDestination(newPos);
+                if (agent.isOnNavMesh) agent.SetDestination(newPos);
                 timer = 0;
             }
 
@@ -74,24 +63,57 @@ public class MonsterAI : MonoBehaviour
         else if (hitCount == 1)
         {
             // 2. 1회 타격 후: 메인 카메라를 향해 걷기 (추적)
-            agent.speed = walkSpeed;
-            agent.SetDestination(targetCamera.position);
-            animator.SetBool("IsWalking", true);
+            if (targetCamera != null && agent.isOnNavMesh)
+            {
+                agent.speed = walkSpeed;
+                MoveToTarget(targetCamera.position);
+                animator.SetBool("IsWalking", true);
+            }
         }
         else if (hitCount == 2)
         {
             // 3. 2회 타격 후: 메인 카메라를 향해 달리기 (추적)
-            agent.speed = runSpeed;
-            agent.SetDestination(targetCamera.position);
-            
-            // 달리기 중에는 별도로 IsWalking을 끄지 않아도 됨 
-            // Any State -> run 트리거를 통해 run 상태가 유지됨
+            if (targetCamera != null && agent.isOnNavMesh)
+            {
+                agent.speed = runSpeed;
+                MoveToTarget(targetCamera.position);
+            }
+        }
+    }
+
+    // 타겟(플레이어 카메라)이 허공이나 NavMesh 영역 바깥에 있을 경우를 위한 보정 이동 함수
+    private void MoveToTarget(Vector3 targetPos)
+    {
+        NavMeshHit hit;
+        // 타겟의 좌표를 기준으로 반경 50m 내에 있는 가장 가까운 길(NavMesh)을 찾아서 그곳으로 가라고 명령합니다.
+        if (NavMesh.SamplePosition(targetPos, out hit, 50f, NavMesh.AllAreas))
+        {
+            agent.SetDestination(hit.position);
+        }
+        else
+        {
+            // 실패 시 그냥 원본 좌표로 강제 시도
+            agent.SetDestination(targetPos);
         }
     }
 
     public void TakeDamage(int damage, Vector3 hitPoint)
     {
         if (isDead) return;
+
+        // 피격 시 타겟(메인 카메라)이 등록되어 있지 않다면 딱 한 번 탐색합니다.
+        if (targetCamera == null)
+        {
+            if (Camera.main != null)
+            {
+                targetCamera = Camera.main.transform;
+            }
+            else
+            {
+                GameObject camObj = GameObject.FindGameObjectWithTag("MainCamera");
+                if (camObj != null) targetCamera = camObj.transform;
+            }
+        }
 
         hitCount++;
 
@@ -108,29 +130,38 @@ public class MonsterAI : MonoBehaviour
     private IEnumerator ReactRoutine(int currentHitCount)
     {
         isReacting = true;
-        if(agent != null) agent.isStopped = true;
+        
+        if(agent != null) 
+        {
+            agent.isStopped = true;
+            agent.updateRotation = false; // 리액션 도중 임의로 회전하지 않도록 방지
+        }
 
         // 피격 리액션 한 번 재생 (Any State -> React_attack)
         animator.SetTrigger("React_attack");
         
-        // 메인 카메라 방향으로 즉시 회전 (플레이어를 쳐다봄)
-        if (targetCamera != null)
-        {
-            Vector3 direction = (targetCamera.position - transform.position).normalized;
-            direction.y = 0; // x, z 평면(수평)만 고려하여 위/아래로 기울지 않게 함
-            if (direction != Vector3.zero)
-            {
-                transform.rotation = Quaternion.LookRotation(direction);
-            }
-        }
-
         // 리액션 애니메이션이 끝날 때까지 대기 
         // (React_attack 클립 길이에 맞춰주세요. 여기서는 임시로 1.25초 대기)
         yield return new WaitForSeconds(1.25f); 
 
         if (!isDead)
         {
-            if(agent != null) agent.isStopped = false;
+            // 애니메이션이 끝난 직후 메인 카메라 방향으로 회전
+            if (targetCamera != null)
+            {
+                Vector3 direction = (targetCamera.position - transform.position).normalized;
+                direction.y = 0; // x, z 평면(수평)만 고려하여 위/아래로 기울지 않게 함
+                if (direction != Vector3.zero)
+                {
+                    transform.rotation = Quaternion.LookRotation(direction);
+                }
+            }
+
+            if(agent != null) 
+            {
+                agent.isStopped = false;
+                agent.updateRotation = true; // 이동 시 자동으로 쳐다보는 기능 복구
+            }
             
             if (currentHitCount == 1)
             {
