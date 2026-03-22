@@ -14,23 +14,84 @@ public class MonsterAI : MonoBehaviour
 
     private Transform targetCamera;
     
-    [Header("Wander Settings")]
-    public float wanderRadius = 10f;
-    public float wanderTimer = 3f;
-    private float timer;
+    public enum MonsterPhase { ToEntrance, ToInvasion, ChasePlayer }
+    private MonsterPhase currentPhase = MonsterPhase.ToEntrance;
+
+    private Transform villageEntrance;
+    private Transform villageInvasion;
+
+    [Header("Phase 1 Settings (ToEntrance)")]
+    public float walkDurationMin = 2f;
+    public float walkDurationMax = 4f;
+    public float idleDurationMin = 1f;
+    public float idleDurationMax = 2f;
+
+    private Coroutine phase1Coroutine;
 
     [Header("Speed Settings")]
     public float walkSpeed = 1.5f;
     public float runSpeed = 4f;
+
+    [Header("Player Chase Settings (Distance)")]
+    [Tooltip("이 거리(m) 안으로 거리가 좁혀지면 걷기에서 '달리기'로 전환됩니다.")]
+    public float runDistanceThreshold = 15f;
+    [Tooltip("이 거리(m) 안으로 거리가 좁혀지면 '점프 공격'을 하고 게임이 끝납니다.")]
+    public float attackDistanceThreshold = 3f;
+
+    private bool isChaseRunning = false;
+    private bool hasTriggeredAttack = false;
 
     void Start()
     {
         animator = GetComponent<Animator>();
         agent = GetComponent<NavMeshAgent>();
         
-        timer = wanderTimer;
-        
         if(agent != null) agent.speed = walkSpeed;
+
+        // 씬에서 목적지를 이름으로 자동 탐색
+        GameObject entranceObj = GameObject.Find("VillageEntrance");
+        GameObject invasionObj = GameObject.Find("VillageInvasion");
+
+        if (entranceObj != null) villageEntrance = entranceObj.transform;
+        if (invasionObj != null) villageInvasion = invasionObj.transform;
+
+        // 시작 시 VillageEntrance를 향해 가다서다 반복
+        if (villageEntrance != null)
+        {
+            phase1Coroutine = StartCoroutine(IdleWalkRoutine());
+        }
+    }
+
+    private IEnumerator IdleWalkRoutine()
+    {
+        // 피격받지 않고, 살아있고, ToEntrance 상태일 때만 반복
+        while (currentPhase == MonsterPhase.ToEntrance && !isDead)
+        {
+            if (isReacting) 
+            {
+                yield return null;
+                continue;
+            }
+
+            // 1. 목적지를 향해 걷기
+            if (agent != null && agent.isOnNavMesh && villageEntrance != null)
+            {
+                agent.isStopped = false;
+                MoveToTarget(villageEntrance.position);
+                animator.SetBool("IsWalking", true);
+            }
+            yield return new WaitForSeconds(Random.Range(walkDurationMin, walkDurationMax));
+
+            if (currentPhase != MonsterPhase.ToEntrance || isDead) break;
+
+            // 2. 잠시 서서 주변 경계 (Idle)
+            if (agent != null && agent.isOnNavMesh)
+            {
+                agent.isStopped = true;
+                animator.SetBool("IsWalking", false);
+            }
+            yield return new WaitForSeconds(Random.Range(idleDurationMin, idleDurationMax));
+        }
     }
 
     void Update()
@@ -40,43 +101,108 @@ public class MonsterAI : MonoBehaviour
 
         if (hitCount == 0)
         {
-            // 1. 타격 전: 배회(Wander) (idle2 <-> walking)
-            timer += Time.deltaTime;
-            if (timer >= wanderTimer)
+            // --- 1. 2D 평면 거리 기반(Distance) 방어선 도달 판정 (Y축 높이 차이 무시) ---
+            if (currentPhase == MonsterPhase.ToEntrance && villageEntrance != null)
             {
-                // 랜덤한 위치로 이동
-                Vector3 newPos = RandomNavSphere(transform.position, wanderRadius, -1);
-                if (agent.isOnNavMesh) agent.SetDestination(newPos);
-                timer = 0;
+                // 몬스터와 큐브의 높이(Y축)가 다르더라도 x, z 좌표만 비교하여 거리를 잽니다.
+                Vector2 monsterPos2D = new Vector2(transform.position.x, transform.position.z);
+                Vector2 entrancePos2D = new Vector2(villageEntrance.position.x, villageEntrance.position.z);
+
+                // 넉넉하게 반경 4.5m 이내에 들어오면 1차 큐브 도착 완료!
+                if (Vector2.Distance(monsterPos2D, entrancePos2D) < 3f)
+                {
+                    currentPhase = MonsterPhase.ToInvasion;
+                    if (phase1Coroutine != null) 
+                    {
+                        StopCoroutine(phase1Coroutine);
+                        phase1Coroutine = null;
+                    }
+                    
+                    if (villageInvasion == null) Debug.LogError("[MonsterAI] 2차 목적지 'VillageInvasion' 큐브를 찾지 못했습니다! 이름을 확인하세요.");
+                }
+            }
+            else if (currentPhase == MonsterPhase.ToInvasion && villageInvasion != null)
+            {
+                Vector2 monsterPos2D = new Vector2(transform.position.x, transform.position.z);
+                Vector2 invasionPos2D = new Vector2(villageInvasion.position.x, villageInvasion.position.z);
+
+                // 2차 큐브도 마찬가지로 X, Z 평면 상으로 4.5m 이내에 진입하면 패배 처리!
+                if (Vector2.Distance(monsterPos2D, invasionPos2D) < 4.5f)
+                {
+                    if (KillCountManager.Instance != null) KillCountManager.Instance.ShowMissionFailedPanel();
+                    if (agent != null) agent.isStopped = true;
+                    animator.SetBool("IsWalking", false);
+                    this.enabled = false; 
+                }
             }
 
-            // agent의 이동 속도에 맞춰 애니메이션 전환
-            if (agent.velocity.magnitude > 0.1f)
+            // --- 2. 2차 큐브(VillageInvasion)를 향해 쉬지 않고 걷는 이동 로직 ---
+            if (currentPhase == MonsterPhase.ToInvasion)
             {
-                animator.SetBool("IsWalking", true);
-            }
-            else
-            {
-                animator.SetBool("IsWalking", false);
-            }
-        }
-        else if (hitCount == 1)
-        {
-            // 2. 1회 타격 후: 메인 카메라를 향해 걷기 (추적)
-            if (targetCamera != null && agent.isOnNavMesh)
-            {
-                agent.speed = walkSpeed;
-                MoveToTarget(targetCamera.position);
-                animator.SetBool("IsWalking", true);
+                if (villageInvasion != null && agent.isOnNavMesh)
+                {
+                    agent.isStopped = false;
+                    MoveToTarget(villageInvasion.position);
+                    animator.SetBool("IsWalking", true);
+                }
             }
         }
-        else if (hitCount == 2)
+        else if (currentPhase == MonsterPhase.ChasePlayer)
         {
-            // 3. 2회 타격 후: 메인 카메라를 향해 달리기 (추적)
-            if (targetCamera != null && agent.isOnNavMesh)
+            if (targetCamera != null && agent.isOnNavMesh && !hasTriggeredAttack)
             {
-                agent.speed = runSpeed;
-                MoveToTarget(targetCamera.position);
+                // Y축(높이)을 무시하고 X, Z 평면 상의 카메라와의 접근 거리를 계산합니다.
+                Vector2 monsterPos2D = new Vector2(transform.position.x, transform.position.z);
+                Vector2 cameraPos2D = new Vector2(targetCamera.position.x, targetCamera.position.z);
+                float distToPlayer = Vector2.Distance(monsterPos2D, cameraPos2D);
+
+                // 1. 공격 거리 진입 (최우선 순위: 점프 뛰고 게임 종료)
+                if (distToPlayer <= attackDistanceThreshold)
+                {
+                    hasTriggeredAttack = true;
+                    if (agent != null) 
+                    {
+                        agent.isStopped = true;
+                        agent.updateRotation = false; // NavMesh 기본 회전 잠금
+                    }
+
+                    // 카메라(플레이어)를 정확히 정면으로 바라보도록 치명적 오차 즉시 보정
+                    Vector3 dirToCamera = (targetCamera.position - transform.position).normalized;
+                    dirToCamera.y = 0; // 수평 기준 회전 (위상 기울어짐 방지)
+                    if (dirToCamera != Vector3.zero)
+                    {
+                        transform.rotation = Quaternion.LookRotation(dirToCamera);
+                    }
+
+                    StartCoroutine(JumpAttackAndFailRoutine());
+                }
+                // 2. 달리기 거리 진입 또는 이미 2번 이상 맞았을 경우
+                else if (distToPlayer <= runDistanceThreshold || hitCount >= 2)
+                {
+                    agent.isStopped = false;
+                    agent.speed = runSpeed;
+                    MoveToTarget(targetCamera.position);
+
+                    // 걷고 있었다면 달리기 모션으로 변경
+                    if (!isChaseRunning && !isReacting)
+                    {
+                        isChaseRunning = true;
+                        animator.SetBool("IsWalking", false);
+                        animator.SetTrigger("run");
+                    }
+                }
+                // 3. 그 밖의 먼 거리 (천천히 걷기 유지)
+                else
+                {
+                    agent.isStopped = false;
+                    agent.speed = walkSpeed;
+                    MoveToTarget(targetCamera.position);
+                    
+                    if (!isReacting && !isChaseRunning)
+                    {
+                        animator.SetBool("IsWalking", true);
+                    }
+                }
             }
         }
     }
@@ -116,6 +242,17 @@ public class MonsterAI : MonoBehaviour
         }
 
         hitCount++;
+
+        // 피격 시 무조건 플레이어 추적으로 노선 변경
+        if (currentPhase != MonsterPhase.ChasePlayer)
+        {
+            currentPhase = MonsterPhase.ChasePlayer;
+            if (phase1Coroutine != null) 
+            {
+                StopCoroutine(phase1Coroutine);
+                phase1Coroutine = null;
+            }
+        }
 
         if (hitCount == 1 || hitCount == 2)
         {
@@ -178,6 +315,24 @@ public class MonsterAI : MonoBehaviour
         isReacting = false;
     }
 
+    private IEnumerator JumpAttackAndFailRoutine()
+    {
+        // 1. 공격 애니메이션 실행
+        animator.SetTrigger("jump_attack");
+
+        // 2. 점프 후 공격이 박히는 시간(약 1초) 정도의 감상할 여유 딜레이를 줍니다.
+        // (*애니메이션 플레이 길이에 맞게 짧거나 길게 조절하시면 더욱 극적입니다)
+        yield return new WaitForSeconds(1.0f);
+
+        // 3. 게임 오버(임무 실패) 패널 호출 및 즉시 기능 정지
+        if (KillCountManager.Instance != null)
+        {
+            KillCountManager.Instance.ShowMissionFailedPanel();
+        }
+        
+        this.enabled = false;
+    }
+
     private void Die()
     {
         isDead = true;
@@ -210,18 +365,11 @@ public class MonsterAI : MonoBehaviour
         // 닭이나 여우와 달리 몬스터는 총기 소음에 패닉 도주하지 않음
     }
 
+    // 물리 충돌 기반의 OnTriggerEnter 로직은 안정적인 Vector3.Distance 거리 계산으로 대체되어 삭제되었습니다.
+
     public void StopAnimation()
     {
         if(agent != null) agent.isStopped = true;
         animator.speed = 0; 
-    }
-
-    public static Vector3 RandomNavSphere(Vector3 origin, float dist, int layermask)
-    {
-        Vector3 randDirection = UnityEngine.Random.insideUnitSphere * dist;
-        randDirection += origin;
-        NavMeshHit navHit;
-        NavMesh.SamplePosition(randDirection, out navHit, dist, layermask);
-        return navHit.position;
     }
 }

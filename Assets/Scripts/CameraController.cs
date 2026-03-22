@@ -77,10 +77,16 @@ public class CameraController : MonoBehaviour
     private float zoomActiveTimer = 0f;
     private bool isPointerInCancelZone = false;
 
+    private Vector3 initialPosition;
+    private Quaternion initialRotation;
+
     // ---------------------------------------------------------------
 
     void Start()
     {
+        initialPosition = transform.position;
+        initialRotation = transform.rotation;
+
         Vector3 rot = transform.eulerAngles;
         pitch = rot.x > 180f ? rot.x - 360f : rot.x;
         yaw = rot.y > 180f ? rot.y - 360f : rot.y;
@@ -463,6 +469,11 @@ public class CameraController : MonoBehaviour
         {
             transform.position = spawnPoint.position;
             transform.rotation = spawnPoint.rotation;
+        }
+        else
+        {
+            transform.position = initialPosition;
+            transform.rotation = initialRotation;
         }
 
         // 2. 내부 변수(pitch, yaw) 동기화
