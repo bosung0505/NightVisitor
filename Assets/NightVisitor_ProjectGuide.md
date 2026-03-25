@@ -211,5 +211,38 @@ New Input System 터치, Legacy 터치, 마우스 3가지 입력 경로 모두�
 * **자연스러운 대기 모션 전환 (Has Exit Time)**: `Any State ➔ React_attack` 처럼 한 번만 재생하고 빠져나와야 하는 모션은, 반드시 `React_attack ➔ idle2` 로 가는 출구 화살표(Transition)를 만들고 `Has Exit Time`을 켜두어야 중간에 굳어버리지 않습니다.
 
 ---
+
+## 20. 서바이벌 디펜스 룰 및 2D 거리 기반 AI 시스템 (2026.03.22 추가)
+
+### 서바이벌 타이머 기획 (Map 2 전용)
+* 기존의 'N마리 처치' 룰을 탈피하고, 배터리를 관리하며 '아침이 밝을 때까지 생존'하는 감시탑(The Watchtower) 디펜스 콘셉트로 변경 기획을 합의했습니다.
+
+### 몬스터 하산 및 방어선 돌파 AI (`MonsterAI.cs`)
+* **자동 목적지 패스파인딩:** 무작위 배회를 삭제하고 씬 내부의 `VillageEntrance`를 향해 가다 서다를 반복하며 내려온 뒤, 도달 시 `VillageInvasion`을 향해 쉬지 않고 돌진합니다.
+* **순수 2D 거리 도달 판정 (트리거 버그 해결):** 
+  * 투명 큐브(`isTrigger`)가 사격 레이캐스트를 막아버리거나, 큐브 위젯의 높이(Y축) 차이 때문에 3D `Vector3.Distance` 판정이 무한루프에 빠지던 유니티 엔진의 물리 한계를 전부 제거했습니다.
+  * 콜라이더(`OnTriggerEnter`) 없이 오직 **X, Z 평면 좌표값(`Vector2.Distance`)** 을 매 프레임 계산하여 백퍼센트의 정확도로 구역 도달을 인지합니다.
+
+### 플레이어 대상 동적 추적 스케일 조절 (ChasePlayer)
+* 피격 시 카메라를 쳐다보고 추적을 시작하되, 거리에 따라 행동이 실시간으로 돌변합니다 (인스펙터에서 반경 수치 상시 튜닝 가능).
+  * **15m 이상 외곽:** 걷기(`walking`) 유지.
+  * **15m 이내 진입 (`runDistanceThreshold`):** 달리기(`run`) 모션으로 자동 전환 및 이동 속도 증가.
+  * **3m 이내 진입 (`attackDistanceThreshold`):** 즉시 이동 정지 후 화면을 덮치는 `jump_attack` 모션 수행.
+  * **공격 강제 회전 스냅 보정:** NavMesh 끄트머리(절벽) 가장자리를 바라보고 걷던 몬스터가 엉뚱하게 길 밑으로 점프하는 버그를 원천 차단했습니다. 모션 재생 1프레임 직전에 `Quaternion.LookRotation`을 활용해 카메라(수평)를 똑바로 노려보도록 초강제 각도 보정을 통과시킵니다.
+* **최후 방어선 붕괴:** 점프(덮치기) 애니메이션의 박진감을 느낄 여유(1초 딜레이 코루틴)를 준 뒤, `KillCountManager.Instance.ShowMissionFailedPanel()`을 호출해 즉시 강제 게임오버(사망) 처리합니다.
+
+---
+
+## 21. Map 2 전용 생존 타이머 구축 및 다중 패널 UI 분리 시스템 (2026.03.25 추가)
+
+### 생존 타이머 및 배터리 동기화 (`SurvivalTimer.cs` & `BatteryController.cs`)
+* **생존 06:00 타이머**: Map 2 전용 `InGame_Panel_Map2`에 부착되어 실제 목표 플레이 시간(현실 시간)에 비례해 인게임 시간(01:00 ~ 06:00)이 차오르도록 구축했습니다. 06:00에 도달하면 즉시 미션 클리어(`MissionClearPanel`)를 호출합니다.
+* **배터리 수명 동적 변환 및 볼륨 맵핑**: 맵 전환 시 구버전의 볼륨(Volume)만 붙잡고 있어 페이드 효과가 먹통이 되는 현상을 없애기 위해 `MapInfo`에서 전용 볼륨을 불러와 덮어씌우도록(`SetVolumes`) 개편했습니다. 
+
+### 동적 UI 링커 및 싱글톤 붕괴 버그 해결 (`InGameUIBinder.cs` & `KillCountManager.cs`)
+* **카메라 UI 자동 할당 링커 (`InGameUIBinder`)**: `InGame_Panel`과 `InGame_Panel_Map2`가 교대될 때 메인 카메라(`RaycastShooter`, `CameraController`, `BatteryController`)가 이전 UI 부품을 계속 쥐고 있어 총알 감소, 줌 조준이 막히는 문제를 완벽히 해결했습니다. 켜진 패널이 즉시 자신의 부품들을 카메라의 뇌에 덮어씌우는 자동 스위칭 방식을 도입했습니다.
+* **싱글톤(Singleton) 연쇄 작용 파괴 통제**: UI를 복제하면서 같이 복사된 매니저 스크립트들이 `Awake()` 시 중복 검사를 하며 서로의 타이머 패널이나 미션 패널을 통째로 자폭(Destroy) 시켜버리는 치명적 버그를 막았습니다. 객체 파괴 로직을 버리고 `OnEnable` 시점에 부드럽게 메인 권한만 빼앗아오도록(`Instance = this`) 변경하여, 맵 1과 2 모두 독립적이고 안전한 킬 카운트/타이머/결과창 제어가 가능해졌습니다!
+
+---
 **[다음에 AI를 부르실 때 사용할 프롬프트 예시]**
 "Assets 폴더 최상단에 있는 `NightVisitor_ProjectGuide.md` 문서를 먼저 읽고 현재 프로젝트 진행 상황과 코드 구조를 파악해 줘!"

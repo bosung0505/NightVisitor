@@ -23776,6 +23776,8 @@ MonoBehaviour:
   allSpawnPointsInMap: []
   allDecoysInMap: []
   startingVolume: {fileID: 8356989694816347435}
+  thermalVolume: {fileID: 1485619453699931576}
+  normalVolume: {fileID: 7136751236271226721}
 --- !u!1 &9215023599947731928
 GameObject:
   m_ObjectHideFlags: 0

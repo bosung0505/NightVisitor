@@ -60,6 +60,12 @@ public class BatteryController : MonoBehaviour
         currentDepleteRate = rate > 0 ? rate : 1.0f;
     }
 
+    public void SetVolumes(Volume tVol, Volume nVol)
+    {
+        if (tVol != null) thermalVolume = tVol;
+        if (nVol != null) normalVolume = nVol;
+    }
+
     public void ResetBattery()
     {
         StopAllCoroutines();

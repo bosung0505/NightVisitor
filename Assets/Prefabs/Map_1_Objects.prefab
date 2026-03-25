@@ -34750,7 +34750,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 9194238242716837293}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 298.5537, y: 0.32608032, z: 382.87256}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -34807,6 +34807,8 @@ MonoBehaviour:
   - {fileID: 286705514778444867}
   - {fileID: 2979138685373498112}
   startingVolume: {fileID: 8356989694816347435}
+  thermalVolume: {fileID: 1485619453699931576}
+  normalVolume: {fileID: 7136751236271226721}
 --- !u!1 &9215023599947731928
 GameObject:
   m_ObjectHideFlags: 0

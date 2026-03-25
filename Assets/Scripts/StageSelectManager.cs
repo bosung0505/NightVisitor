@@ -59,6 +59,10 @@ public struct StageConfig2
     [Tooltip("총 예비 탄약 수 (음수면 기본 유지)")]
     public int maxReloadableAmmo;
 
+    [Header("Survival Settings")]
+    [Tooltip("생존 목표 시간 (현실 시간 분 기준, 예: 4면 4분 동안 버팀)")]
+    public float survivalTimeMinutes;
+
     [Header("Camera Settings (Map 2 Only)")]
     [Tooltip("카메라 시작 위치 및 회전 (빈 오브젝트 할당)")]
     public Transform cameraSpawnPoint;
@@ -74,6 +78,7 @@ public class StageSelectManager : MonoBehaviour
     public CanvasGroup mapStagePanel;
     public CanvasGroup mapStagePanel2; // Map 2용 스테이지 패널 추가
     public CanvasGroup inGamePanel;
+    public CanvasGroup inGamePanel2; // Map 2 전용 인게임 패널 추가
     public CanvasGroup gunSelectPanel;
 
     [Header("Stage Configurations (Map 1)")]
@@ -126,6 +131,12 @@ public class StageSelectManager : MonoBehaviour
             inGamePanel.gameObject.SetActive(false);
         }
 
+        if (inGamePanel2 != null)
+        {
+            inGamePanel2.alpha = 0f;
+            inGamePanel2.gameObject.SetActive(false);
+        }
+
         if (gunSelectPanel != null)
         {
             gunSelectPanel.alpha = 0f;
@@ -144,7 +155,7 @@ public class StageSelectManager : MonoBehaviour
 
         StartGame(config.mapPrefab, config.targetKillCount, config.foxSpawnInterval, config.maxConcurrentFoxes, 
                   config.activeSpawnPointNames, config.activeDecoyNames, config.ignoreSneakZone, 
-                  config.batteryDepleteRate, config.maxReloadableAmmo, null, defaultPitch, defaultYaw);
+                  config.batteryDepleteRate, config.maxReloadableAmmo, null, defaultPitch, defaultYaw, 0f, false);
     }
 
     // Map 2 실행용
@@ -163,13 +174,13 @@ public class StageSelectManager : MonoBehaviour
 
         StartGame(config.mapPrefab, config.targetKillCount, defaultSpawnInterval, defaultMaxFoxes, 
                   defaultSpawnPoints, config.activeDecoyNames, defaultIgnoreSneak, 
-                  config.batteryDepleteRate, config.maxReloadableAmmo, config.cameraSpawnPoint, pLimit, yLimit);
+                  config.batteryDepleteRate, config.maxReloadableAmmo, config.cameraSpawnPoint, pLimit, yLimit, config.survivalTimeMinutes, true);
     }
 
     // 통합 게임 시작 로직
     private void StartGame(GameObject mapPrefab, int targetKillCount, float foxSpawnInterval, int maxConcurrentFoxes, 
                            string[] activeSpawnPointNames, string[] activeDecoyNames, bool ignoreSneakZone, 
-                           float batteryDepleteRate, int maxReloadableAmmo, Transform camSpawn = null, Vector2 pLimit = default, Vector2 yLimit = default)
+                           float batteryDepleteRate, int maxReloadableAmmo, Transform camSpawn = null, Vector2 pLimit = default, Vector2 yLimit = default, float survivalTimeMinutes = 0f, bool isMap2 = false)
     {
         // 1. 패널 페이드 (마지막에 활성화되었던 패널을 끕니다)
         if (lastActiveStagePanel != null)
@@ -179,10 +190,13 @@ public class StageSelectManager : MonoBehaviour
                 lastActiveStagePanel.gameObject.SetActive(false);
             });
         }
-        if (inGamePanel != null)
+        
+        CanvasGroup activeInGamePanel = isMap2 ? inGamePanel2 : inGamePanel;
+        
+        if (activeInGamePanel != null)
         {
-            inGamePanel.gameObject.SetActive(true);
-            inGamePanel.DOFade(1f, fadeDuration).SetUpdate(true);
+            activeInGamePanel.gameObject.SetActive(true);
+            activeInGamePanel.DOFade(1f, fadeDuration).SetUpdate(true);
         }
 
         if (gunSelectPanel != null)
@@ -201,6 +215,7 @@ public class StageSelectManager : MonoBehaviour
 
         // 프리팹을 진짜 화면에 생성합니다. (이 순간 닭과 디코이가 원본 그대로 완벽하게 복원됩니다)
         currentInstantiatedMap = Instantiate(mapPrefab);
+        currentInstantiatedMap.SetActive(true); // 프리팹이 실수로 꺼진 채로 저장되었을 경우를 대비한 강제 활성화
 
         // 생성된 맵에서 MapInfo 스크립트를 뽑아옵니다.
         MapInfo currentMapInfo = currentInstantiatedMap.GetComponent<MapInfo>();
@@ -267,6 +282,12 @@ public class StageSelectManager : MonoBehaviour
                 if (equippedScope != null) batteryRate *= equippedScope.batteryEfficiencyMultiplier;
             }
             BatteryController.Instance.InitBatteryRate(batteryRate);
+
+            if (currentMapInfo != null)
+            {
+                BatteryController.Instance.SetVolumes(currentMapInfo.thermalVolume, currentMapInfo.normalVolume);
+            }
+
             BatteryController.Instance.ResetBattery();
         }
 
@@ -294,7 +315,10 @@ public class StageSelectManager : MonoBehaviour
 
             if (gunManager != null)
             {
-                // currentMapInfo가 쥐고 있는 Volume_Start를 뽑아서 넘겨줍니다.
+                // 알맞은 inGamePanel을 GunSelectManager에 먼저 연결
+                gunManager.inGameUIPanel = isMap2 ? inGamePanel2 : inGamePanel;
+
+                // 그 다음 PrepareGunSelection을 호출해야 연결된 패널을 올바르게 끕니다!
                 Volume volToPass = (currentMapInfo != null) ? currentMapInfo.startingVolume : null;
                 gunManager.PrepareGunSelection(volToPass);
             }
@@ -313,6 +337,12 @@ public class StageSelectManager : MonoBehaviour
             {
                 camController.SetCameraPoseAndLimits(camSpawn, pLimit, yLimit);
             }
+        }
+
+        // Map 2의 경우 생존 타이머 시작
+        if (isMap2 && SurvivalTimer.Instance != null)
+        {
+            SurvivalTimer.Instance.StartTimer(survivalTimeMinutes);
         }
     }
 
@@ -336,11 +366,19 @@ public class StageSelectManager : MonoBehaviour
 
     public void ReturnToMap()
     {
-        if (inGamePanel != null)
+        if (inGamePanel != null && inGamePanel.gameObject.activeSelf)
         {
             inGamePanel.DOFade(0f, fadeDuration).SetUpdate(true).OnComplete(() =>
             {
                 inGamePanel.gameObject.SetActive(false);
+            });
+        }
+
+        if (inGamePanel2 != null && inGamePanel2.gameObject.activeSelf)
+        {
+            inGamePanel2.DOFade(0f, fadeDuration).SetUpdate(true).OnComplete(() =>
+            {
+                inGamePanel2.gameObject.SetActive(false);
             });
         }
 
@@ -352,6 +390,7 @@ public class StageSelectManager : MonoBehaviour
 
         if (BatteryController.Instance != null) BatteryController.Instance.StopBattery();
         if (FoxManager.Instance != null) FoxManager.Instance.StopSpawning();
+        if (SurvivalTimer.Instance != null) SurvivalTimer.Instance.StopTimer();
 
         // 1. 남은 클론 여우들 삭제
         CleanUpActiveFoxes();

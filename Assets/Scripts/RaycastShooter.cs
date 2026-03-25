@@ -499,7 +499,7 @@ public class RaycastShooter : MonoBehaviour
         UpdateAmmoUI();
     }
 
-    private void UpdateAmmoUI()
+    public void UpdateAmmoUI()
     {
         if (currentAmmoText != null)
             currentAmmoText.text = currentAmmo.ToString();

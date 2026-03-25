@@ -1,20 +1,24 @@
-using System.Collections.Generic; // List¸¦ ¾²±â À§ÇØ Ãß°¡
+using System.Collections.Generic; // Listë¥¼ ì“°ê¸° ìœ„í•´ ì¶”ê°€
 using UnityEngine;
 using UnityEngine.Rendering;
 
 public class MapInfo : MonoBehaviour
 {
     [Header("Map Configurations")]
-    [Tooltip("½ºÅ×ÀÌÁö 1~10¿¡¼­ ¾µ ¸ğµç ½ºÆù À§Ä¡¸¦ ´Ù ³Ö¾îµÎ¼¼¿ä!")]
+    [Tooltip("ìŠ¤í…Œì´ì§€ 1~10ì—ì„œ ì“¸ ëª¨ë“  ìŠ¤í° ìœ„ì¹˜ë¥¼ ë‹¤ ë„£ì–´ë‘ì„¸ìš”!")]
     public Transform[] allSpawnPointsInMap;
 
-    [Tooltip("ÀÌ ¸Ê¿¡ ¹èÄ¡µÈ ¸ğµç µğÄÚÀÌ ¿©¿ìµé")]
+    [Tooltip("ì´ ë§µì— ë°°ì¹˜ëœ ëª¨ë“  ë””ì½”ì´ ì—¬ìš°ë“¤")]
     public DecoyFoxAI[] allDecoysInMap;
 
-    [Tooltip("ÀÌ ¸ÊÀÌ ÄÑÁú ¶§ È­¸éÀ» µ¤À» Volume_Start ¿ÀºêÁ§Æ®")]
+    [Tooltip("ì´ ë§µì´ ì¼œì§ˆ ë•Œ í™”ë©´ì„ ë®ì„ Volume_Start ì˜¤ë¸Œì íŠ¸")]
     public Volume startingVolume;
 
-    // --- (±âÁ¸ µğÄÚÀÌ ¼¼ÆÃ ÇÔ¼ö ±×´ë·Î À¯Áö) ---
+    [Header("Battery Volumes (Map Specific)")]
+    public Volume thermalVolume;
+    public Volume normalVolume;
+
+    // --- (ê¸°ì¡´ ë””ì½”ì´ ì„¸íŒ… í•¨ìˆ˜ ê·¸ëŒ€ë¡œ ìœ ì§€) ---
     public void SetupDecoys(string[] activeDecoyNames)
     {
         foreach (var decoy in allDecoysInMap)
@@ -38,11 +42,11 @@ public class MapInfo : MonoBehaviour
         }
     }
 
-    // --- ¡Ú [½Å±Ô Ãß°¡] ½ºÅ×ÀÌÁöº°·Î ÁöÁ¤µÈ ½ºÆù Æ÷ÀÎÆ®¸¸ ½ï °ñ¶ó¼­ ¹İÈ¯ÇÏ´Â ÇÔ¼ö ---
+    // --- â˜… [ì‹ ê·œ ì¶”ê°€] ìŠ¤í…Œì´ì§€ë³„ë¡œ ì§€ì •ëœ ìŠ¤í° í¬ì¸íŠ¸ë§Œ ì™ ê³¨ë¼ì„œ ë°˜í™˜í•˜ëŠ” í•¨ìˆ˜ ---
     public Transform[] GetActiveSpawnPoints(string[] targetSpawnNames)
     {
-        // ¸¸¾à ½ºÅ×ÀÌÁö ¸Å´ÏÀú¿¡¼­ ÀÌ¸§À» ÇÏ³ªµµ ¾È Àû¾îÁá´Ù¸é? 
-        // ¿¡·¯ ¹æÁö¸¦ À§ÇØ ÀÏ´Ü ¸Ê¿¡ ÀÖ´Â ÀüÃ¼ ½ºÆù Æ÷ÀÎÆ®¸¦ ´Ù ³Ñ°ÜÁİ´Ï´Ù.
+        // ë§Œì•½ ìŠ¤í…Œì´ì§€ ë§¤ë‹ˆì €ì—ì„œ ì´ë¦„ì„ í•˜ë‚˜ë„ ì•ˆ ì ì–´ì¤¬ë‹¤ë©´? 
+        // ì—ëŸ¬ ë°©ì§€ë¥¼ ìœ„í•´ ì¼ë‹¨ ë§µì— ìˆëŠ” ì „ì²´ ìŠ¤í° í¬ì¸íŠ¸ë¥¼ ë‹¤ ë„˜ê²¨ì¤ë‹ˆë‹¤.
         if (targetSpawnNames == null || targetSpawnNames.Length == 0)
         {
             return allSpawnPointsInMap;
@@ -50,12 +54,12 @@ public class MapInfo : MonoBehaviour
 
         List<Transform> resultList = new List<Transform>();
 
-        // ¸ÊÀÌ °¡Áø ÀüÃ¼ ½ºÆù Æ÷ÀÎÆ® Áß¿¡¼­
+        // ë§µì´ ê°€ì§„ ì „ì²´ ìŠ¤í° í¬ì¸íŠ¸ ì¤‘ì—ì„œ
         foreach (Transform t in allSpawnPointsInMap)
         {
             if (t == null) continue;
 
-            // ÀÌ¸§ÀÌ ÀÏÄ¡ÇÏ´Â ³à¼®¸¸ ¸®½ºÆ®¿¡ ´ã½À´Ï´Ù.
+            // ì´ë¦„ì´ ì¼ì¹˜í•˜ëŠ” ë…€ì„ë§Œ ë¦¬ìŠ¤íŠ¸ì— ë‹´ìŠµë‹ˆë‹¤.
             foreach (string name in targetSpawnNames)
             {
                 if (t.gameObject.name == name)
@@ -66,6 +70,6 @@ public class MapInfo : MonoBehaviour
             }
         }
 
-        return resultList.ToArray(); // ¹è¿­·Î º¯È¯ÇØ¼­ ¸®ÅÏ!
+        return resultList.ToArray(); // ë°°ì—´ë¡œ ë³€í™˜í•´ì„œ ë¦¬í„´!
     }
 }

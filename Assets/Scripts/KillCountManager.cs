@@ -95,15 +95,15 @@ public class KillCountManager : MonoBehaviour
 
     private void Awake()
     {
-        // 간단한 싱글톤 초기화
-        if (Instance == null)
-        {
-            Instance = this;
-        }
-        else if (Instance != this)
-        {
-            Destroy(gameObject);
-        }
+        // 기존의 파괴(Destroy) 로직 삭제: 
+        // 맵 판널마다 각자의 KillCountManager를 안전하게 가질 수 있도록 합니다.
+        Instance = this;
+    }
+
+    private void OnEnable()
+    {
+        // 켜진(활성화된) 판넬의 매니저가 메인 인스턴스 권한을 가져옵니다!
+        Instance = this;
     }
 
     private void Start()
