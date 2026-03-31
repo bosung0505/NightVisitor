@@ -19,7 +19,12 @@ MonoBehaviour:
   itemPrice: 0
   itemDescription: Support 4X maginificatioin / 1024 resolution / detection distance
     180yd / Battery Efficiency 100
+  gunDamage: 1
+  shootSound: {fileID: 0}
+  maxAmmoInClip: 8
+  recoilUp: 2
+  recoilSide: 1
   zoomMultiplier: 4
-  fogStartDistance: 50
-  fogEndDistance: 150
+  fogStartDistance: 100
+  fogEndDistance: 250
   batteryEfficiencyMultiplier: 0.5

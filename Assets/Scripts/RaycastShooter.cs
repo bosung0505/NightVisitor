@@ -301,14 +301,22 @@ public class RaycastShooter : MonoBehaviour
                     }
                     else
                     {
-                        // Trigger the "Die" parameter
-                        animator.SetTrigger("Die");
-                        Debug.Log("Hit " + hit.collider.name + " and triggered Die animation.");
-                        
-                        // --- [신규 로직] 우측 상단 킬 정보 UI 갱신 (히트박스가 없는 동물을 쐈을 때) ---
-                        if (KillCountManager.Instance != null && (foxAnim != null || decoyAnim != null))
+                        MutantAI mutantAnim = animator.GetComponent<MutantAI>();
+                        if (mutantAnim != null)
                         {
-                            KillCountManager.Instance.AddKill();
+                            mutantAnim.TakeDamage(currentGunDamage, hit.point);
+                        }
+                        else
+                        {
+                            // Trigger the "Die" parameter
+                            animator.SetTrigger("Die");
+                            Debug.Log("Hit " + hit.collider.name + " and triggered Die animation.");
+                            
+                            // --- [신규 로직] 우측 상단 킬 정보 UI 갱신 (히트박스가 없는 동물을 쐈을 때) ---
+                            if (KillCountManager.Instance != null && (foxAnim != null || decoyAnim != null))
+                            {
+                                KillCountManager.Instance.AddKill();
+                            }
                         }
                     }
                 }
@@ -431,10 +439,18 @@ public class RaycastShooter : MonoBehaviour
                     }
                     else
                     {
-                        animator.SetTrigger("Die");
+                        MutantAI mutantAnim = animator.GetComponent<MutantAI>();
+                        if (mutantAnim != null)
+                        {
+                            mutantAnim.TakeDamage(currentGunDamage, hit.point);
+                        }
+                        else
+                        {
+                            animator.SetTrigger("Die");
 
-                        if (KillCountManager.Instance != null && (foxAnim != null || decoyAnim != null))
-                            KillCountManager.Instance.AddKill();
+                            if (KillCountManager.Instance != null && (foxAnim != null || decoyAnim != null))
+                                KillCountManager.Instance.AddKill();
+                        }
                     }
                 }
             }
@@ -458,6 +474,10 @@ public class RaycastShooter : MonoBehaviour
                 MonsterAI monster = nearby.GetComponent<MonsterAI>();
                 if (monster == null) monster = nearby.GetComponentInParent<MonsterAI>();
                 if (monster != null) monster.FleeFrom(hit.point);
+
+                MutantAI mutant = nearby.GetComponent<MutantAI>();
+                if (mutant == null) mutant = nearby.GetComponentInParent<MutantAI>();
+                if (mutant != null) mutant.FleeFrom(hit.point);
             }
         }
     }
