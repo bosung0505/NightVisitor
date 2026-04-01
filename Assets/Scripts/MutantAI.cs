@@ -38,10 +38,31 @@ public class MutantAI : MonoBehaviour
     [Tooltip("이 거리(m) 안으로 거리가 좁혀지면 '점프 공격'을 하고 게임이 끝납니다.")]
     public float attackDistanceThreshold = 3f;
 
+    [Header("Reaction Settings")]
+    [Tooltip("첫 총격 시 두리번거리는 대기 시간(초)")]
+    public float lookAroundDuration = 4f;
+    [Tooltip("두 번째 총격 시 스크림(포효) 애니메이션을 재생할지 여부")]
+    public bool useScreamOnSecondHit = true;
+    [Tooltip("스크림 애니메이션 재생 후 실제로 뛰어오기까지의 대기 시간(초)")]
+    public float screamDuration = 2f;
+
+    [Header("Audio Settings")]
+    [Tooltip("2타격 포효 시 재생할 비명 소리 파일 (Inspector에 드래그)")]
+    public AudioClip screamClip;
+    [Tooltip("사망 시 모든 소리를 끊고 재생할 사망 소리 파일")]
+    public AudioClip deathClip;
+    
+    [Header("Footstep Audio Settings")]
+    [Tooltip("걷기 발자국 소리 루프")]
+    public AudioClip walkStepClip;
+    [Tooltip("뛰어오기(돌진) 발자국 소리 루프")]
+    public AudioClip runStepClip;
+
     [Header("Animation Settings (Triggers/Bools)")]
     public string animWalkBool = "IsWalking";
     public string animRunTrigger = "run";
-    public string animReactTrigger = "React_Attack";
+    public string animLookAroundTrigger = "LookAround";
+    public string animScreamTrigger = "Scream";
     public string animJumpAttackTrigger = "jump_attack";
     public string animDeathTrigger = "dying";
 
@@ -53,11 +74,14 @@ public class MutantAI : MonoBehaviour
 
     private bool isChaseRunning = false;
     private bool hasTriggeredAttack = false;
+    private Coroutine currentReactionCoroutine; // 연사 덮어쓰기 로직을 위한 보관함
+    private AudioSource audioSource; // 비명 소리를 발생시킬 자체 스피커
 
     void Start()
     {
         animator = GetComponent<Animator>();
         agent = GetComponent<NavMeshAgent>();
+        audioSource = GetComponent<AudioSource>(); // 자동 할당
         
         if(agent != null) agent.speed = walkSpeed;
 
@@ -164,6 +188,9 @@ public class MutantAI : MonoBehaviour
         {
             if (targetCamera != null && agent.isOnNavMesh && !hasTriggeredAttack)
             {
+                // 리액션(두리번거리기, 소리지르기) 도중에는 매 프레임 발생하는 이동 명령을 전면 차단하여 발을 묶습니다.
+                if (isReacting) return;
+
                 // Y축(높이)을 무시하고 X, Z 평면 상의 카메라와의 접근 거리를 계산합니다.
                 Vector2 monsterPos2D = new Vector2(transform.position.x, transform.position.z);
                 Vector2 cameraPos2D = new Vector2(targetCamera.position.x, targetCamera.position.z);
@@ -270,7 +297,12 @@ public class MutantAI : MonoBehaviour
 
         if (hitCount == 1 || hitCount == 2)
         {
-            StartCoroutine(ReactRoutine(hitCount));
+            // 만약 1번 맞고 두리번거리고 있던 도중에 또 맞았다면(연사), 두리번 모션을 강제 취소시킵니다.
+            if (currentReactionCoroutine != null)
+            {
+                StopCoroutine(currentReactionCoroutine);
+            }
+            currentReactionCoroutine = StartCoroutine(ReactRoutine(hitCount));
         }
         else if (hitCount >= 3)
         {
@@ -282,32 +314,62 @@ public class MutantAI : MonoBehaviour
     {
         isReacting = true;
         
+        // 기존에 걷거나 뛰고 있던 모션을 완전히 강제 종료시켜 기절 상태(LookAround)를 방해하지 않게 만듭니다.
+        animator.SetBool(animWalkBool, false);
+
         if(agent != null) 
         {
             agent.isStopped = true;
-            agent.updateRotation = false; // 리액션 도중 임의로 회전하지 않도록 방지
+            agent.updateRotation = false; // 제자리 리액션 도중 몸이 꼬이지 않도록 엔진 회전 잠금
         }
 
-        // 피격 리액션 한 번 재생 (Any State -> React_attack)
-        animator.SetTrigger(animReactTrigger);
-        
-        // 리액션 애니메이션이 끝날 때까지 대기 
-        // (React_attack 클립 길이에 맞춰주세요. 여기서는 임시로 1.25초 대기)
-        yield return new WaitForSeconds(1.25f); 
+        // 가장 먼저, 카메라(플레이어)를 쳐다보고 동작을 수행합니다. (요청사항 반영)
+        if (targetCamera != null)
+        {
+            Vector3 direction = (targetCamera.position - transform.position).normalized;
+            direction.y = 0; // 공중으로 몸이 꺾이지 않도록 방지
+            if (direction != Vector3.zero)
+            {
+                transform.rotation = Quaternion.LookRotation(direction);
+            }
+        }
 
+        // 타격 횟수에 따른 철저한 분기
+        if (currentHitCount == 1)
+        {
+            // 1대 맞음: 두리번 거리는 애니메이션 재생 및 설정된 시간만큼 대기
+            animator.SetTrigger(animLookAroundTrigger);
+            yield return new WaitForSeconds(lookAroundDuration);
+        }
+        else if (currentHitCount == 2)
+        {
+            // 2대 맞음: 포효(Scream) 옵션이 켜져있다면, 소리지르고 대기 / 꺼져있다면 즉각 통과
+            if (useScreamOnSecondHit)
+            {
+                animator.SetTrigger(animScreamTrigger);
+                
+                // 디버깅: 왜 소리가 안 나는지 추적하는 탐지기 코드
+                if (audioSource == null) 
+                {
+                    Debug.LogWarning("🚨 [MutantAI] AudioSource 컴포넌트를 찾지 못했습니다! (프리팹 원본에 안 달려있을 확률 99%)");
+                }
+                else if (screamClip == null)
+                {
+                    Debug.LogWarning("🚨 [MutantAI] Scream Clip 사운드 파일 칸이 비어 있습니다! (인스펙터 확인 요망)");
+                }
+                else
+                {
+                    Debug.Log("✅ [MutantAI] 스크립트에서 정상적으로 오디오 재생 명령(PlayOneShot)을 실행했습니다!");
+                    audioSource.PlayOneShot(screamClip);
+                }
+                
+                yield return new WaitForSeconds(screamDuration);
+            }
+        }
+
+        // 지연 시간이 끝났을 때(죽지 않았다면) 다음 액션을 수행
         if (!isDead)
         {
-            // 애니메이션이 끝난 직후 메인 카메라 방향으로 회전
-            if (targetCamera != null)
-            {
-                Vector3 direction = (targetCamera.position - transform.position).normalized;
-                direction.y = 0; // x, z 평면(수평)만 고려하여 위/아래로 기울지 않게 함
-                if (direction != Vector3.zero)
-                {
-                    transform.rotation = Quaternion.LookRotation(direction);
-                }
-            }
-
             if(agent != null) 
             {
                 agent.isStopped = false;
@@ -316,17 +378,20 @@ public class MutantAI : MonoBehaviour
             
             if (currentHitCount == 1)
             {
-                // 천천히 걸어가기 위한 Bool 세팅
+                // 두리번거림이 끝나고 걷기 돌입
                 animator.SetBool(animWalkBool, true);
             }
             else if (currentHitCount == 2)
             {
-                // 달리기 애니메이션 재생 (Any State -> run)
+                // 포효가 끝난 뒤 미친 듯이 돌진
+                isChaseRunning = true;
+                animator.SetBool(animWalkBool, false); // 기존에 걷던 모션 해제
                 animator.SetTrigger(animRunTrigger);
             }
         }
 
         isReacting = false;
+        currentReactionCoroutine = null; // 완전히 끝났으므로 비워줌
     }
 
     private IEnumerator JumpAttackAndFailRoutine()
@@ -389,6 +454,16 @@ public class MutantAI : MonoBehaviour
 
         // 3번째 피격 시 사망 애니메이션 (Any State -> death)
         animator.SetTrigger(animDeathTrigger);
+        
+        // 추가: 사망 시 기존에 내던 소리(포효 등)를 즉각 끊고 사망 사운드 재생
+        if (audioSource != null)
+        {
+            audioSource.Stop();
+            if (deathClip != null)
+            {
+                audioSource.PlayOneShot(deathClip);
+            }
+        }
 
         // 여우처럼 상호작용 막기 (콜라이더 비활성화)
         Collider[] colliders = GetComponentsInChildren<Collider>();
@@ -413,5 +488,27 @@ public class MutantAI : MonoBehaviour
     {
         if(agent != null) agent.isStopped = true;
         animator.speed = 0; 
+    }
+
+    // --- 애니메이션 타임라인 이벤트(Event) 전용 호출 함수 ---
+    // (이 함수들은 유니티의 Animator가 특정 프레임을 밟을 때 자동으로 찔러줍니다!)
+    public void PlayWalkFootstep()
+    {
+        if (audioSource != null && walkStepClip != null && !isDead)
+        {
+            // 발을 밟는 강도가 매번 다른 것처럼 세기(Volume)를 무작위 조절합니다.
+            float randomVol = UnityEngine.Random.Range(0.6f, 1.0f);
+            audioSource.PlayOneShot(walkStepClip, randomVol);
+        }
+    }
+
+    public void PlayRunFootstep()
+    {
+        if (audioSource != null && runStepClip != null && !isDead)
+        {
+            // 뛰는 발소리는 걷는 발소리보다 기본적으로 더 강하고 묵직하게 소리납니다.
+            float randomVol = UnityEngine.Random.Range(0.85f, 1.0f);
+            audioSource.PlayOneShot(runStepClip, randomVol);
+        }
     }
 }
