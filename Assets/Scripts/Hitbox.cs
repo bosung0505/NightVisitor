@@ -10,11 +10,13 @@ public class Hitbox : MonoBehaviour
     public void TakeDamage(int baseDamage, Vector3 hitPoint)
     {
         int finalDamage = baseDamage;
+        bool isHeadshot = false; // 신규 추가
         
         // Critical(머리/가슴)을 맞았을 경우 데미지 증폭 (기본 1데미지가 2로 불어남)
         if (type == HitboxType.Critical)
         {
             finalDamage *= 2;
+            isHeadshot = true; // 대가리 맞음 판정
         }
 
         // hit된 콜라이더의 부모(혹은 조상)에 있는 여우 메인 제어 스크립트를 찾음
@@ -43,7 +45,8 @@ public class Hitbox : MonoBehaviour
                     MutantAI mutant = GetComponentInParent<MutantAI>();
                     if (mutant != null)
                     {
-                        mutant.TakeDamage(finalDamage, hitPoint);
+                        // 뮤턴트에만 헤드샷 여부를 넘겨서 머리 폭파 로직 연동
+                        mutant.TakeDamage(finalDamage, hitPoint, isHeadshot);
                     }
                     else
                     {

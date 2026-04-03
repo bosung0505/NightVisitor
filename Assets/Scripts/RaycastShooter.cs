@@ -242,6 +242,16 @@ public class RaycastShooter : MonoBehaviour
             // Debug line for visual confirmation in Scene view
             Debug.DrawLine(ray.origin, hit.point, Color.red, 2f);
 
+            // 동적으로 맵이 생성되거나 파티클이 끊어졌을 때를 대비해 실시간으로 다시 찾기
+            if (bloodSplatter == null)
+            {
+                GameObject splatterObj = GameObject.Find("FX_BloodSplatter");
+                if (splatterObj != null)
+                {
+                    bloodSplatter = splatterObj.GetComponent<ParticleSystem>();
+                }
+            }
+
             // play blood splatter effect
             if (bloodSplatter != null)
             {
@@ -402,6 +412,16 @@ public class RaycastShooter : MonoBehaviour
         if (Physics.Raycast(ray, out hit))
         {
             Debug.DrawLine(ray.origin, hit.point, Color.green, 2f);
+
+            // 동적으로 맵이 생성되거나 파티클이 끊어졌을 때를 대비해 실시간으로 다시 찾기
+            if (bloodSplatter == null)
+            {
+                GameObject splatterObj = GameObject.Find("FX_BloodSplatter");
+                if (splatterObj != null)
+                {
+                    bloodSplatter = splatterObj.GetComponent<ParticleSystem>();
+                }
+            }
 
             if (bloodSplatter != null)
             {

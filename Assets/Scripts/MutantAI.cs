@@ -14,8 +14,31 @@ public class MutantAI : MonoBehaviour
 
     private Transform targetCamera;
     
-    public enum MutantPhase { ToEntrance, ToInvasion, ChasePlayer }
+    public enum MutantPhase { ToEntrance, ToInvasion, ChasePlayer, Crawling }
     private MutantPhase currentPhase = MutantPhase.ToEntrance;
+
+    [Header("Revival Settings")]
+    [Tooltip("체크 시 일정 스테이지부터는 죽어도 한 번 기어오는 기믹이 추가됩니다.")]
+    public bool enableRevive = false;
+    [Tooltip("가짜 죽음 상태에서 부활하기까지 세뇌시키는 화면 대기 시간 (초)")]
+    public float reviveDelay = 2.5f;
+    [Tooltip("헤드샷으로 죽어서 머리가 없는 상태로 부활했을 때의 느린 속도")]
+    public float slowCrawlSpeed = 1.0f;
+    [Tooltip("바디샷으로 죽어서 머리가 있는 채로 부활했을 때의 빠른 속도")]
+    public float fastCrawlSpeed = 3.5f;
+    
+    [Tooltip("기어오는 사망 모션이 따로 없을 경우, 원래 서서 죽는 모션 중 '어느 시점(0.0~1.0)'부터 틀어서 잘라 쓸 지 결정")]
+    public float crawlDeathStartTime = 0.6f; 
+    [Tooltip("애니메이터에 표시된 실제 죽는 모션의 네모 박스 이름 (State Name). 대소문자 정확해야 합니다.")]
+    public string animDeathStateName = "Death";
+
+    [Header("Revival Animation Triggers")]
+    public string animSlowCrawlTrigger = "Crawl_Slow";
+    public string animFastCrawlTrigger = "Crawl_Fast";
+
+    // 실제 사망인지 가짜 사망인지 구분하는 변수
+    private bool hasAlreadyRevived = false;
+    private bool isTrueDead = false;
 
     private Transform villageEntrance;
     private Transform villageInvasion;
@@ -71,6 +94,18 @@ public class MutantAI : MonoBehaviour
     public float extraJumpHeight = 1.5f;
     [Tooltip("점프 및 체공하는 공격 시간 (실패 전 딜레이 시간)")]
     public float jumpDuration = 1.0f;
+
+    [Header("Headshot Gore Settings")]
+    [Tooltip("머리통 뼈대 (Head Bone)를 여기에 할당하세요.")]
+    public Transform headBone;
+    [Tooltip("유저가 달아둔 목 파티클 오브젝트 (선택사항)")]
+    public GameObject neckBloodParticlePrefab;
+    [Tooltip("피 분수 파티클을 몇 초 동안 재생하고 멈출지 결정합니다.")]
+    public float neckBloodDuration = 3.0f;
+
+    [Header("Chain Aggro Settings")]
+    [Tooltip("소리를 내거나 죽을 때 주변 동료를 분노하게 만드는 반경 (씬 뷰에서 빨간 원으로 표시됨)")]
+    public float aggroRadius = 15.0f;
 
     private bool isChaseRunning = false;
     private bool hasTriggeredAttack = false;
@@ -184,7 +219,7 @@ public class MutantAI : MonoBehaviour
                 }
             }
         }
-        else if (currentPhase == MutantPhase.ChasePlayer)
+        else if (currentPhase == MutantPhase.ChasePlayer || currentPhase == MutantPhase.Crawling)
         {
             if (targetCamera != null && agent.isOnNavMesh && !hasTriggeredAttack)
             {
@@ -196,7 +231,7 @@ public class MutantAI : MonoBehaviour
                 Vector2 cameraPos2D = new Vector2(targetCamera.position.x, targetCamera.position.z);
                 float distToPlayer = Vector2.Distance(monsterPos2D, cameraPos2D);
 
-                // 1. 공격 거리 진입 (최우선 순위: 점프 뛰고 게임 종료)
+                // 1. 공격 거리 진입 (최우선 순위: 덮치거나 발목 깨물기)
                 if (distToPlayer <= attackDistanceThreshold)
                 {
                     hasTriggeredAttack = true;
@@ -215,7 +250,22 @@ public class MutantAI : MonoBehaviour
                         transform.rotation = Quaternion.LookRotation(dirToCamera);
                     }
 
-                    StartCoroutine(JumpAttackAndFailRoutine());
+                    if (currentPhase == MutantPhase.Crawling)
+                    {
+                        // 기어오던 놈은 덮칠 모션의 공중 점프를 하면 안 되므로, 발목을 깨무는 연출과 함께 즉시 게임 오버 패널을 띄웁니다.
+                        if (KillCountManager.Instance != null) KillCountManager.Instance.ShowMissionFailedPanel();
+                        this.enabled = false;
+                    }
+                    else
+                    {
+                        StartCoroutine(JumpAttackAndFailRoutine());
+                    }
+                }
+                // 1.5. 크롤링 전용 행동 진입 (달리기 모션 교체 금지)
+                else if (currentPhase == MutantPhase.Crawling)
+                {
+                    agent.isStopped = false;
+                    MoveToTarget(targetCamera.position);
                 }
                 // 2. 달리기 거리 진입 또는 이미 2번 이상 맞았을 경우
                 else if (distToPlayer <= runDistanceThreshold || hitCount >= 2)
@@ -264,8 +314,19 @@ public class MutantAI : MonoBehaviour
         }
     }
 
-    public void TakeDamage(int damage, Vector3 hitPoint)
+    public void TakeDamage(int damage, Vector3 hitPoint, bool isHeadshot = false)
     {
+        if (isTrueDead) return;
+
+        // 크롤링 중이었다면(이미 부활해서 기어오는 좀비) 데미지에 상관없이 딱 1방에 진짜 즉사!
+        if (currentPhase == MutantPhase.Crawling)
+        {
+            Debug.Log("🎯 [MutantAI] 기어오는 돌연변이에게 명중! 즉시 완전 사망 처리 실행!");
+            Die(isHeadshot, true); 
+            return;
+        }
+
+        // 가짜 죽음 상태(바닥에 쓰러져 일어날 준비 중)일 때는 무적 피격 판정 무시
         if (isDead) return;
 
         // 피격 시 타겟(메인 카메라)이 등록되어 있지 않다면 딱 한 번 탐색합니다.
@@ -282,7 +343,7 @@ public class MutantAI : MonoBehaviour
             }
         }
 
-        hitCount++;
+        hitCount += damage;
 
         // 피격 시 무조건 플레이어 추적으로 노선 변경
         if (currentPhase != MutantPhase.ChasePlayer)
@@ -306,7 +367,7 @@ public class MutantAI : MonoBehaviour
         }
         else if (hitCount >= 3)
         {
-            Die();
+            Die(isHeadshot, false); // 3대를 맞아 처음 쓰러질 때는 진짜 죽음(True Death) 플래그를 넘기지 않습니다. Die 내부에서 enableRevive 여부에 따라 심판.
         }
     }
 
@@ -363,6 +424,9 @@ public class MutantAI : MonoBehaviour
                     audioSource.PlayOneShot(screamClip);
                 }
                 
+                // 2대 맞아서 비명을 지를 때 주변 돌연변이들에게 어그로 신호를 뿌립니다!
+                BroadcastAggro();
+
                 yield return new WaitForSeconds(screamDuration);
             }
         }
@@ -442,9 +506,28 @@ public class MutantAI : MonoBehaviour
         this.enabled = false;
     }
 
-    private void Die()
+    private void Die(bool explodeHead = false, bool isFinalDeath = false)
     {
-        isDead = true;
+        bool wasCrawling = (currentPhase == MutantPhase.Crawling);
+
+        // 죽을 때 나는 엄청난 비명 혹은 터지는 소리로 인해 주변 반경에 어그로 신호를 뿌립니다!
+        BroadcastAggro();
+
+        // 이미 부활해서 기어오고 있었다면 이것은 무조건 참혹한 진짜 최후의 죽음!
+        if (wasCrawling) isFinalDeath = true;
+        
+        // 인스펙터에서 부활 옵션이 진작 꺼져있었다면 당연히 첫 죽음부터가 진짜 죽음!
+        if (!enableRevive) isFinalDeath = true;
+
+        if (isFinalDeath)
+        {
+            isTrueDead = true; // 영구 사망 플래그 박제
+            isDead = true;
+        }
+        else
+        {
+            isDead = true; // 가짜 죽음 (움직임 일시 정지를 위한 뇌사 상태)
+        }
         
         if (agent != null)
         {
@@ -452,30 +535,93 @@ public class MutantAI : MonoBehaviour
             agent.enabled = false;
         }
 
-        // 3번째 피격 시 사망 애니메이션 (Any State -> death)
-        animator.SetTrigger(animDeathTrigger);
-        
-        // 추가: 사망 시 기존에 내던 소리(포효 등)를 즉각 끊고 사망 사운드 재생
-        if (audioSource != null)
+        // --- 헤드샷 폭파 연출 (최초 사망 시에만 터짐. 기어가다가 얻어맞은 놈은 무시) ---
+        if (explodeHead && headBone != null && !wasCrawling)
         {
-            audioSource.Stop();
-            if (deathClip != null)
+            headBone.localScale = Vector3.zero; // 머리 크기를 0으로 축소하여 감춤
+
+            if (neckBloodParticlePrefab != null)
             {
-                audioSource.PlayOneShot(deathClip);
+                neckBloodParticlePrefab.SetActive(true);
+                ParticleSystem[] pSystems = neckBloodParticlePrefab.GetComponentsInChildren<ParticleSystem>();
+                foreach(ParticleSystem ps in pSystems) { ps.Play(); }
+                if (neckBloodDuration > 0) StartCoroutine(StopBloodParticleRoutine(pSystems, neckBloodDuration));
             }
         }
 
-        // 여우처럼 상호작용 막기 (콜라이더 비활성화)
-        Collider[] colliders = GetComponentsInChildren<Collider>();
-        foreach (Collider col in colliders)
+        // --- 사운드 처리 (처음 쓰러질 때만 소리냄) ---
+        if (audioSource != null && !wasCrawling)
         {
-            col.enabled = false;
+            audioSource.Stop();
+            if (deathClip != null) audioSource.PlayOneShot(deathClip);
         }
-        
-        // 사망 킬 카운트 누적
-        if (KillCountManager.Instance != null)
+
+        // --- 애니메이션 처리 (요청하신 "특정 시점부터 재생하기" 꼼수 로직) ---
+        if (isFinalDeath && wasCrawling)
         {
-            KillCountManager.Instance.AddKill();
+            // [원인 해결!] 기존에는 'dying'이라는 "Trigger(조건) 파라미터 이름"으로 상태를 찾으려 했기 때문에
+            // 애니메이터가 해당 이름의 네모 박스(State)를 찾지 못하고 무시해버렸을 확률이 99% 입니다.
+            // 인스펙터에 새로 추가한 State 이름을 통해 명확하게 해당 상자를 즉시 실행시킵니다.
+            animator.Play(animDeathStateName, 0, crawlDeathStartTime); 
+        }
+        else
+        {
+            // 첫 가짜 사망이거나, 옵션이 꺼져 있을 때의 평범하게 일어서 있다 쓰러지기
+            animator.SetTrigger(animDeathTrigger);
+        }
+
+        // --- 킬 수 오르기 처리 (영구 사망인 경우에만!) ---
+        if (isFinalDeath)
+        {
+            if (KillCountManager.Instance != null) KillCountManager.Instance.AddKill();
+            
+            // 모든 콜라이더 완전 삭제 처리 (영원히 상호작용 불가능, 시체로서 밟지 못하게)
+            Collider[] colliders = GetComponentsInChildren<Collider>();
+            foreach (Collider col in colliders) { col.enabled = false; }
+            
+            this.enabled = false; // 스크립트 전원 자체 차단! 끝!
+        }
+        else
+        {
+            // --- [중요] 가짜 사망인 경우에는 킬 수도 안 오르고 바닥에 쓰러진 후 일정 시간 뒤 부활 루틴! ---
+            StartCoroutine(ReviveRoutine(explodeHead));
+        }
+    }
+
+    private IEnumerator ReviveRoutine(bool isHeadshot)
+    {
+        // 1. 유저가 플레이어가 안심하길 기다리며 쓰러진 채 대기 (낚시)
+        yield return new WaitForSeconds(reviveDelay);
+        
+        // 2. 가짜 시체 상태 해제 및 다시 기어오기 상태 돌입!
+        isDead = false;
+        hasAlreadyRevived = true;
+        currentPhase = MutantPhase.Crawling;
+
+        // NavMesh를 다시 켜되, 바닥을 기어갈 거니까 속도를 조절
+        if (agent != null)
+        {
+            agent.enabled = true;
+            agent.isStopped = false;
+            
+            // 머리가 박살나면 느린 기어가기 로직 (보너스)
+            if (isHeadshot)
+            {
+                agent.speed = slowCrawlSpeed;
+                animator.SetTrigger(animSlowCrawlTrigger);
+            }
+            // 머리가 멀쩡하게 바디샷으로 죽었으면 빠른 기어가기 로직 (패널티)
+            else
+            {
+                agent.speed = fastCrawlSpeed;
+                animator.SetTrigger(animFastCrawlTrigger);
+            }
+            
+            // 즉시 카메라 쪽으로 몸 확 비틀기
+            if (targetCamera != null)
+            {
+                MoveToTarget(targetCamera.position);
+            }
         }
     }
 
@@ -488,6 +634,20 @@ public class MutantAI : MonoBehaviour
     {
         if(agent != null) agent.isStopped = true;
         animator.speed = 0; 
+    }
+
+    private IEnumerator StopBloodParticleRoutine(ParticleSystem[] pSystems, float duration)
+    {
+        yield return new WaitForSeconds(duration);
+        
+        foreach(ParticleSystem ps in pSystems)
+        {
+            if (ps != null)
+            {
+                // 오브젝트 전체를 끄지 않고(SetActive(false X), 파티클 '방출'만 멈춰서 이미 뿌려진 피는 공기 중으로 자연스럽게 떨어져 사라지게 둡니다.
+                ps.Stop();
+            }
+        }
     }
 
     // --- 애니메이션 타임라인 이벤트(Event) 전용 호출 함수 ---
@@ -510,5 +670,109 @@ public class MutantAI : MonoBehaviour
             float randomVol = UnityEngine.Random.Range(0.85f, 1.0f);
             audioSource.PlayOneShot(runStepClip, randomVol);
         }
+    }
+
+    // ==========================================
+    // --- 연쇄 어그로 (Chain Aggro) 시스템 로직 ---
+    // ==========================================
+
+    private void BroadcastAggro()
+    {
+        Collider[] colliders = Physics.OverlapSphere(transform.position, aggroRadius);
+        foreach (Collider col in colliders)
+        {
+            // 내 자식/부모에 달린 콜라이더여도 MutantAI를 정확히 찾습니다.
+            MutantAI siblingMutant = col.GetComponentInParent<MutantAI>();
+            
+            // 나 자신이 아니고, 살아있고, 돌연변이 AI 컴포넌트를 가진 타겟에게만 알람 전송
+            if (siblingMutant != null && siblingMutant != this)
+            {
+                siblingMutant.OnHearAggro();
+            }
+        }
+    }
+
+    public void OnHearAggro()
+    {
+        // 옵션 B 적용: 죽었거나, 죽은 척(가짜 죽음 대기) 중이거나, 이미 쫓고 있는 등 한가하지 않은 상태면 무지성 100% 무시합니다.
+        if (isDead || isReacting || currentPhase == MutantPhase.ChasePlayer || currentPhase == MutantPhase.Crawling) return;
+
+        StartCoroutine(AggroReactionRoutine());
+    }
+
+    private IEnumerator AggroReactionRoutine()
+    {
+        isReacting = true; // 이동 불가 잠금
+        animator.SetBool(animWalkBool, false);
+
+        if (agent != null)
+        {
+            agent.isStopped = true;
+            agent.updateRotation = false; // 기본 자율 회전 끄기
+        }
+
+        // 1. 유저 요청: 1초 동안 어리둥절하게 그 자리에서 소름돋는 정적(얼음)
+        yield return new WaitForSeconds(1.0f);
+
+        // 2. 시간이 지나면 플레이어(카메라)를 홱 쳐다봄
+        if (targetCamera == null)
+        {
+            if (Camera.main != null) targetCamera = Camera.main.transform;
+            else 
+            {
+                GameObject cam = GameObject.FindGameObjectWithTag("MainCamera");
+                if (cam != null) targetCamera = cam.transform;
+            }
+        }
+
+        if (targetCamera != null)
+        {
+            Vector3 direction = (targetCamera.position - transform.position).normalized;
+            direction.y = 0;
+            if (direction != Vector3.zero) transform.rotation = Quaternion.LookRotation(direction);
+        }
+
+        // 3. 동료를 죽인 원수를 향해 나도 분노의 포효!
+        animator.SetTrigger(animScreamTrigger);
+        if (audioSource != null && screamClip != null)
+        {
+            audioSource.PlayOneShot(screamClip);
+        }
+
+        // 포효 사운드 클립/애니메이션 길이만큼 대기
+        yield return new WaitForSeconds(screamDuration);
+
+        // 4. 모션이 끝나고 살아있다면 즉시 미친 듯이 돌진!
+        if (!isDead)
+        {
+            currentPhase = MutantPhase.ChasePlayer; // 페이즈 변경
+            
+            // 만약 걷고 있던 멍청한 (ToEntrance) 상태 코루틴 타이머가 남아있다면 박살 냄
+            if (phase1Coroutine != null) 
+            { 
+                StopCoroutine(phase1Coroutine); 
+                phase1Coroutine = null; 
+            }
+
+            if(agent != null) 
+            {
+                agent.isStopped = false;
+                agent.updateRotation = true;
+            }
+            
+            isChaseRunning = true;
+            animator.SetBool(animWalkBool, false); // 산책 끄기
+            animator.SetTrigger(animRunTrigger);   // 달리기 켜기
+        }
+
+        isReacting = false;
+    }
+
+    // 유니티 씬(Scene) 화면에서만 렌더링되는 시각화 도구 (레벨 디자인 용도)
+    private void OnDrawGizmosSelected()
+    {
+        // 선택한 뮤턴트의 바닥(중심)을 기준으로 빨간 투명 와이어 반경을 그립니다.
+        Gizmos.color = new Color(1.0f, 0.0f, 0.0f, 0.5f); // 강렬한 반투명 빨간색
+        Gizmos.DrawWireSphere(transform.position, aggroRadius);
     }
 }
