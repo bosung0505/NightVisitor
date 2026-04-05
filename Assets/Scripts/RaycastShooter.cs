@@ -38,7 +38,10 @@ public class RaycastShooter : MonoBehaviour
     public AudioClip reloadSound;
     [Tooltip("빈 총깍지 소리 (선택사항)")]
     public AudioClip emptyClickSound;
+    [Tooltip("재장전 중 재생될 심장박동 사운드 (Map 2 전용)")]
+    public AudioClip heartbeatClip;
     private AudioSource audioSource;
+    private AudioSource heartbeatAudioSource; // 심장박동 전용 AudioSource
 
     [Header("UI References")]
     public TextMeshProUGUI currentAmmoText;
@@ -53,6 +56,18 @@ public class RaycastShooter : MonoBehaviour
     public float recoilUp = 2f;
     [Tooltip("총을 쏠 때 시점이 좌우로 튀는 무작위 반동 세기")]
     public float recoilSide = 1f;
+
+    [Header("Reload Tension Settings")]
+    [Tooltip("재장전 중 어두워질 볼륨 (Starting Volume / 완전암전 오버레이). 인스펙터에서 드래그 연결.")]
+    public UnityEngine.Rendering.Volume reloadDimVolume;
+    [Tooltip("재장전 중 StartingVolume의 weight가 올라갈 목표값 (0.6 권장)")]
+    public float reloadVolumeTargetWeight = 0.6f;
+    [Tooltip("볼륨이 점점 올라오는 데 걸리는 시간 (초)")]
+    public float reloadVolumeFadeInDuration = 0.5f;
+    [Tooltip("볼륨이 다시 내려가는 데 걸리는 시간 (초). 재장전 완료 직전에 시작됨")]
+    public float reloadVolumeFadeOutDuration = 0.5f;
+    [Tooltip("재장전 중 카메라 셰이크 강도 (breathAmount 배수)")]
+    public float reloadBreathMultiplier = 3.5f;
 
     void Start()
     {
@@ -85,6 +100,13 @@ public class RaycastShooter : MonoBehaviour
             audioSource = gameObject.AddComponent<AudioSource>();
             audioSource.playOnAwake = false; // 자동 재생 방지
         }
+
+        // 심장박동 전용 AudioSource 생성 (루프 재생용)
+        heartbeatAudioSource = gameObject.AddComponent<AudioSource>();
+        heartbeatAudioSource.playOnAwake = false;
+        heartbeatAudioSource.loop = true;
+        heartbeatAudioSource.spatialBlend = 0f; // 2D 사운드 (UI 효과음)
+        heartbeatAudioSource.volume = 0.7f;
     }
 
     void Update()
@@ -505,6 +527,9 @@ public class RaycastShooter : MonoBehaviour
     // === [신규 로직] 장전 시스템 ===
     public void TryReload()
     {
+        // 게임 종료 연출 중(점프 공격/마을 침략)에는 장전 차단
+        if (KillCountManager.isGameEnding) return;
+
         // 이미 장전 중이거나, 장전할 예비 탄약이 없거나, 이미 탄창이 꽉 차있으면 액션 무시
         if (isReloading || currentReloadableAmmo <= 0 || currentAmmo >= maxAmmoPerMag)
             return;
@@ -515,20 +540,64 @@ public class RaycastShooter : MonoBehaviour
     private IEnumerator ReloadCoroutine()
     {
         isReloading = true;
-        
+
         // 장전 도중 버튼 연타 방지를 위해 일시 비활성화
         if (reloadButton != null)
             reloadButton.interactable = false;
 
         // 재장전 사운드 재생
         if (reloadSound != null && audioSource != null)
-        {
             audioSource.PlayOneShot(reloadSound);
+
+        // ── 재장전 긴장감 효과 (Map 1/2 공통) ────────────────────────────
+        // reloadDimVolume: 인스펙터에서 StartingVolume을 연결해 두면 동작
+        CameraController camCtrl = (mainCamera != null)
+            ? mainCamera.GetComponent<CameraController>() : null;
+        bool hasDimVolume = (reloadDimVolume != null);
+
+        if (hasDimVolume)
+        {
+            // 1. 심장박동 SFX 시작
+            if (heartbeatClip != null && heartbeatAudioSource != null)
+            {
+                heartbeatAudioSource.clip = heartbeatClip;
+                heartbeatAudioSource.Play();
+            }
+
+            // 2. 카메라 셰이크 강화
+            if (camCtrl != null)
+                camCtrl.breathAmount *= reloadBreathMultiplier;
+
+            // 3. StartingVolume Lerp: 0 → reloadVolumeTargetWeight (fadeIn)
+            StartCoroutine(FadeThermalVolume(reloadDimVolume, reloadDimVolume.weight, reloadVolumeTargetWeight, reloadVolumeFadeInDuration));
+        }
+        // ─────────────────────────────────────────────────────────────────
+
+        // 총 재장전 시간 3.1초 중 페이드 아웃 직전까지 대기
+        float holdTime = 3.1f - reloadVolumeFadeOutDuration;
+        yield return new WaitForSeconds(Mathf.Max(0f, holdTime));
+
+        if (hasDimVolume)
+        {
+            // 4. StartingVolume Lerp: reloadVolumeTargetWeight → 0 (fadeOut)
+            StartCoroutine(FadeThermalVolume(reloadDimVolume, reloadVolumeTargetWeight, 0f, reloadVolumeFadeOutDuration));
         }
 
-        // 3.1초 대기
-        yield return new WaitForSeconds(3.1f);
+        // 페이드 아웃 완료까지 대기
+        yield return new WaitForSeconds(reloadVolumeFadeOutDuration);
 
+        if (hasDimVolume)
+        {
+            // 5. 심장박동 SFX 중지
+            if (heartbeatAudioSource != null)
+                heartbeatAudioSource.Stop();
+
+            // 6. 카메라 셰이크 복구
+            if (camCtrl != null)
+                camCtrl.breathAmount /= reloadBreathMultiplier;
+        }
+
+        // ── 탄약 보충 ────────────────────────────────────────────────────
         int ammoNeeded = maxAmmoPerMag - currentAmmo;
         int ammoToReload = Mathf.Min(ammoNeeded, currentReloadableAmmo);
 
@@ -537,6 +606,24 @@ public class RaycastShooter : MonoBehaviour
 
         isReloading = false;
         UpdateAmmoUI();
+    }
+
+    /// <summary>
+    /// Volume.weight를 duration 초에 걸쳐 from → to로 부드럽게 Lerp합니다.
+    /// StartingVolume(재장전 암전)에 사용되며 ThermalVolume은 건드리지 않습니다.
+    /// </summary>
+    private IEnumerator FadeThermalVolume(UnityEngine.Rendering.Volume vol, float from, float to, float duration)
+    {
+        if (vol == null || duration <= 0f) yield break;
+
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            vol.weight = Mathf.Lerp(from, to, elapsed / duration);
+            yield return null;
+        }
+        vol.weight = to;
     }
 
     public void UpdateAmmoUI()

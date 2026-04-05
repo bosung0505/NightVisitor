@@ -38,6 +38,16 @@ public class CameraController : MonoBehaviour
     [Tooltip("줌 버튼 UI (기본 스코프 장착 시 자동 숨김 처리)")]
     public UnityEngine.UI.Button zoomButton;
 
+    [Header("Zoom Fog & Battery Drain Settings")]
+    [Tooltip("줌 시 fogEndDistance를 확장할 배율 (2.0 = 2배 멀리 보임)")]
+    public float zoomFogMultiplier = 2.0f;
+    [Tooltip("이 시간(초) 이상 줌을 유지하면 배터리 소모 가속 시작")]
+    public float zoomScanThreshold = 0.8f;
+    [Tooltip("줌 지속 시 적용되는 배터리 소모 배율")]
+    public float zoomBatteryDrainMultiplier = 2.5f;
+    private float savedFogEnd;      // 줌 진입 시 저장하는 원본 Fog 거리
+    private bool isZoomDrainActive; // 줌 드레인이 활성화되어 있는지 추적
+
     private Camera cam;
     private float defaultFOV;
     private float targetFOV;
@@ -233,6 +243,9 @@ public class CameraController : MonoBehaviour
 
     void Update()
     {
+        // ★ 게임 종료 연출 중 (점프 공격 / 마을 침략) → 플레이어 입력 전면 차단
+        if (KillCountManager.isGameEnding) return;
+
         // --- 반동 복원 ---
         targetRecoilOffset = Vector3.Lerp(targetRecoilOffset, Vector3.zero, returnSpeed * Time.unscaledDeltaTime);
         currentRecoilOffset = Vector3.Slerp(currentRecoilOffset, targetRecoilOffset, snappiness * Time.unscaledDeltaTime);
@@ -262,6 +275,14 @@ public class CameraController : MonoBehaviour
         {
             zoomActiveTimer += Time.unscaledDeltaTime;
             if (zoomActiveTimer >= 2.5f) ResetTouchState();
+
+            // ★ 줌 스캔 임계값 초과 시 배터리 가속 소모 ON
+            if (!isZoomDrainActive && zoomActiveTimer >= zoomScanThreshold)
+            {
+                isZoomDrainActive = true;
+                if (BatteryController.Instance != null)
+                    BatteryController.Instance.SetZoomDrainActive(true, zoomBatteryDrainMultiplier);
+            }
         }
 
         // ★ 홀드 타이머: Holding 상태일 때만 증가
@@ -427,6 +448,12 @@ public class CameraController : MonoBehaviour
                 scopeOverlayUI.anchoredPosition = Vector2.zero;
                 scopeOverlayUI.gameObject.SetActive(true);
             }
+
+            // ★ Fog End Distance 확장 (현재 값을 저장 후 배율 적용)
+            savedFogEnd = RenderSettings.fogEndDistance;
+            RenderSettings.fogEndDistance = savedFogEnd * zoomFogMultiplier;
+
+            isZoomDrainActive = false; // 드레인 플래그 리셋
         }
         // 스코프 없으면 줌 진입 안 함 — touchState는 Holding 유지
     }
@@ -447,6 +474,17 @@ public class CameraController : MonoBehaviour
         {
             scopeOverlayUI.anchoredPosition = scopeDefaultAnchoredPos;
             scopeOverlayUI.gameObject.SetActive(false);
+        }
+
+        // ★ Fog End Distance 원복
+        RenderSettings.fogEndDistance = savedFogEnd;
+
+        // ★ 줌 배터리 가속 해제
+        if (isZoomDrainActive)
+        {
+            isZoomDrainActive = false;
+            if (BatteryController.Instance != null)
+                BatteryController.Instance.SetZoomDrainActive(false, 1.0f);
         }
     }
 

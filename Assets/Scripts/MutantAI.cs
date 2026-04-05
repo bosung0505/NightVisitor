@@ -201,6 +201,8 @@ public class MutantAI : MonoBehaviour
                 // 2차 큐브도 마찬가지로 X, Z 평면 상으로 4.5m 이내에 진입하면 패배 처리!
                 if (Vector2.Distance(monsterPos2D, invasionPos2D) < 4.5f)
                 {
+                    // ★ 마을 침략 성공 — 입력 차단 플래그 먼저 ON
+                    KillCountManager.isGameEnding = true;
                     if (KillCountManager.Instance != null) KillCountManager.Instance.ShowMissionFailedPanel();
                     if (agent != null) agent.isStopped = true;
                     animator.SetBool(animWalkBool, false);
@@ -250,16 +252,8 @@ public class MutantAI : MonoBehaviour
                         transform.rotation = Quaternion.LookRotation(dirToCamera);
                     }
 
-                    if (currentPhase == MutantPhase.Crawling)
-                    {
-                        // 기어오던 놈은 덮칠 모션의 공중 점프를 하면 안 되므로, 발목을 깨무는 연출과 함께 즉시 게임 오버 패널을 띄웁니다.
-                        if (KillCountManager.Instance != null) KillCountManager.Instance.ShowMissionFailedPanel();
-                        this.enabled = false;
-                    }
-                    else
-                    {
-                        StartCoroutine(JumpAttackAndFailRoutine());
-                    }
+                    // 기어오든 뛰어오든 동일하게 점프 공격 애니메이션 → 딜레이 → 미션 실패 흐름으로 통일
+                    StartCoroutine(JumpAttackAndFailRoutine());
                 }
                 // 1.5. 크롤링 전용 행동 진입 (달리기 모션 교체 금지)
                 else if (currentPhase == MutantPhase.Crawling)
@@ -460,7 +454,13 @@ public class MutantAI : MonoBehaviour
 
     private IEnumerator JumpAttackAndFailRoutine()
     {
-        // 1. 공격 애니메이션 실행
+        // ★ 1. 점프 시작 즉시: 입력 차단 + 애니메이터를 UnscaledTime으로 전환
+        //    → Time.timeScale = 0이더라도 점프 애니메이션과 이동이 정상 재생됩니다.
+        KillCountManager.isGameEnding = true;
+        if (animator != null)
+            animator.updateMode = AnimatorUpdateMode.UnscaledTime;
+
+        // 2. 공격 애니메이션 실행
         animator.SetTrigger(animJumpAttackTrigger);
 
         float timer = 0f;
@@ -469,41 +469,51 @@ public class MutantAI : MonoBehaviour
         // 타겟(카메라)이 없으면 제자리 점프로 폴백
         Vector3 targetPos = (targetCamera != null) ? targetCamera.position : startPos;
         
-        // 무중력 비행을 막기 위해 타겟의 높이(Y)를 뮤턴트가 뛰기 시작한 바닥(startY)과 똑같게 맞춰버립니다. 
+        // 무중력 비행을 막기 위해 타겟의 높이(Y)를 뜻어오는 바닥(startY)과 또같게 맞춥니다. 
         targetPos.y = startPos.y; 
 
-        // 점프의 '정점(최고 높이)'에서 게임을 끝내기 위해 반복문 절반 실행
+        // 점프의 '정점(최고 높이)'에서 게임을 끊내기 위해 반복문 절반 실행
         float peakTime = jumpDuration * 0.5f;
+
+        // ★ 나머지 모든 NavMeshAgent(= 다른 뒤턴트)를 우선 정지
+        //    (timeScale=0로도 자동 정지되지만, 추가 보험 차원에서 명시적으로 정지)
+        MutantAI[] allMutants = FindObjectsByType<MutantAI>(FindObjectsSortMode.None);
+        foreach (MutantAI m in allMutants)
+        {
+            if (m == this) continue;
+            if (m.agent != null && m.agent.enabled) m.agent.isStopped = true;
+        }
 
         while (timer < peakTime)
         {
-            timer += Time.deltaTime;
-            float progress = timer / jumpDuration; // 0.0 에서 0.5 까지만 증가
+            timer += Time.unscaledDeltaTime; // ★ timeScale=0에서도 제대로 진행
+            float progress = timer / jumpDuration;
 
-            // Y축 비행 없이 X, Z축(평면 평행 이동)으로만 카메라 방향을 향해 80% 돌진합니다.
             Vector3 currentFlatPos = Vector3.Lerp(startPos, targetPos, progress * 1.6f);
             
-            // 유저가 인스펙터에서 입력한 고유의 점프 높이만을 적용합니다. (0이면 올라가지 않음)
             float addedHeight = 0f;
             if (extraJumpHeight > 0f)
             {
                 addedHeight = Mathf.Sin(progress * Mathf.PI) * extraJumpHeight;
             }
             
-            // XZ 평면 이동 결과에 내가 설정한 점프 높이만 얹어서 좌표 적용
             transform.position = new Vector3(currentFlatPos.x, startPos.y + addedHeight, currentFlatPos.z);
             yield return null;
         }
-
-        // 루프가 끝나는 순간 = 기본/추가 점프 포물선의 정점에서 화면에 가장 가깝게 다가온 찰나!
 
         // 3. 게임 오버(임무 실패) 패널 호출
         if (KillCountManager.Instance != null)
         {
             KillCountManager.Instance.ShowMissionFailedPanel();
         }
+
+        // ★ 패널 표시로 timeScale=0이 된 순간, 애니메이터를 Normal 모드로 복구
+        //    → timeScale=0이 이 뮤턴트 애니메이션도 함께 프리즈 (원래처럼 점프 정점에서 딱 멈춤)
+        if (animator != null)
+            animator.updateMode = AnimatorUpdateMode.Normal;
         
         this.enabled = false;
+
     }
 
     private void Die(bool explodeHead = false, bool isFinalDeath = false)

@@ -239,6 +239,13 @@ public class StageSelectManager : MonoBehaviour
                 ShopItemData equippedGun = InventoryManager.Instance.GetEquippedGunData();
                 if (equippedGun != null) RaycastShooter.Instance.InitGunData(equippedGun);
             }
+
+            // ★ 맵 프리팹의 startingVolume을 재장전 암전 볼륨으로 주입
+            // (인스펙터 연결 불필요 — 단일씬 아키텍처 대응)
+            if (currentMapInfo != null)
+            {
+                RaycastShooter.Instance.reloadDimVolume = currentMapInfo.startingVolume;
+            }
         }
 
         // 혹시 무대에 남아있을지 모르는 떠돌이 클론 여우들 청소
@@ -282,6 +289,13 @@ public class StageSelectManager : MonoBehaviour
                 if (equippedScope != null) batteryRate *= equippedScope.batteryEfficiencyMultiplier;
             }
             BatteryController.Instance.InitBatteryRate(batteryRate);
+
+            // ★ Map 2: 생존 목표 시간 기반으로 배터리 1칸 주기 자동 계산
+            //    (예: 4분 생존 목표 → depleteInterval ≈ 68초/칸)
+            if (isMap2 && survivalTimeMinutes > 0.1f)
+            {
+                BatteryController.Instance.SetAutoInterval(survivalTimeMinutes * 60f);
+            }
 
             if (currentMapInfo != null)
             {

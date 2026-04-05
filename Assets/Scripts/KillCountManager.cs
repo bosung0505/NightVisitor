@@ -93,6 +93,12 @@ public class KillCountManager : MonoBehaviour
     private bool isCleared = false; // 클리어 여부 플래그
     private Coroutine hideCoroutine; // 현재 진행중인 숨김 코루틴
 
+    /// <summary>
+    /// 점프 공격/마을 침략 등 게임 종료 연출이 시작된 순간부터 true.
+    /// CameraController가 이 플래그를 감지해 플레이어 입력을 즉시 차단합니다.
+    /// </summary>
+    public static bool isGameEnding = false;
+
     private void Awake()
     {
         // 기존의 파괴(Destroy) 로직 삭제: 
@@ -159,6 +165,7 @@ public class KillCountManager : MonoBehaviour
         
         targetKills = target;
         isCleared = false;
+        isGameEnding = false; // ★ 새 스테이지 시작 시 게임 종료 플래그 리셋
 
         if (killCountText != null) killCountText.text = currentKills.ToString();
         if (currentKillCountText != null) currentKillCountText.text = currentKills.ToString();
@@ -333,6 +340,7 @@ public class KillCountManager : MonoBehaviour
         Debug.Log("[KillCountManager] ShowMissionClearPanel() Triggered!");
         
         // 미션 클리어 시 인게임 진행(적 움직임, 탄약, 시간 등)을 모두 정지합니다.
+        isGameEnding = true; // ★ 입력 차단 플래그
         Time.timeScale = 0f;
 
         // 골드 계산 및 결과창 텍스트 세팅
@@ -366,6 +374,7 @@ public class KillCountManager : MonoBehaviour
         }
 
         // 미션 실패 시 인게임 진행(적 움직임, 탄약, 시간 등)을 모두 정지합니다.
+        isGameEnding = true; // ★ 입력 차단 플래그
         Time.timeScale = 0f;
 
         // 골드 계산 및 결과창 텍스트 세팅 (실패 시에도 집계하여 보여줌)

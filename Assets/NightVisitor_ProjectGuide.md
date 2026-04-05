@@ -292,3 +292,86 @@ New Input System 터치, Legacy 터치, 마우스 3가지 입력 경로 모두�
 ---
 **[다음에 AI를 부르실 때 사용할 프롬프트 예시]**
 "Assets 폴더 최상단에 있는 `NightVisitor_ProjectGuide.md` 문서를 먼저 읽고 현재 프로젝트 진행 상황과 코드 구조를 파악해 줘!"
+
+---
+
+## 24. 재장전 긴장감 고조 시스템 (2026.04.05 추가)
+
+### 기획 의도
+열화상 카메라로 시야를 확보하는 Map 2에서, 재장전 중에는 총기를 내리기 때문에 스코프를 볼 수 없다는 서사적 개연성(Diegetic Design)을 활용하여 3.1초의 재장전 구간 동안 플레이어를 극도의 긴장 상태로 몰아넣는 시스템입니다.
+
+### 적용 대상
+`RaycastShooter.cs` → `ReloadCoroutine()` 내부에서 처리. **Map 2 전용**으로, `BatteryController.Instance.thermalVolume`이 존재하고 활성화된 경우(`isMap2 == true`)에만 발동합니다. Map 1은 완전히 무영향.
+
+### 3중 긴장감 연출 타임라인
+- 재장전 버튼 클릭 즉시: 심장박동 SFX 루프 시작(2D/loop), 카메라 호흡 셰이크 강화(breathAmount × 3.5), thermalVolume Lerp 0→0.6 (0.5초 fadeIn)
+- 약 2.1초간 긴장의 정적: 시야 흐릿, 발소리·포효만 들림
+- 재장전 완료 직전 0.5초: thermalVolume Lerp 0.6→0 (fadeOut), 심장박동 정지, 셰이크 복구
+- 재장전 완료: 열화상 시야 완전 복구(안도감)
+
+### 인스펙터 튜닝 변수 (RaycastShooter - Reload Tension Settings 헤더)
+- `heartbeatClip`: 심장박동 오디오 클립 (인스펙터에서 연결 필요)
+- `reloadVolumeTargetWeight`: 0.6 (어두워지는 최대 weight)
+- `reloadVolumeFadeInDuration`: 0.5초
+- `reloadVolumeFadeOutDuration`: 0.5초
+- `reloadBreathMultiplier`: 3.5 (셰이크 강도 배수)
+
+### Volume 충돌 방지
+`FadeThermalVolume()` 전용 코루틴을 분리하여 `BatteryController`의 `TransitionToNormalVolume()`과 완전히 독립적으로 작동. 배터리 방전과 재장전이 동시에 일어나도 weight 값이 튀지 않습니다.
+
+---
+**[다음에 AI를 부르실 때 사용할 프롬프트 예시]**
+`Assets 폴더 최상단에 있는 NightVisitor_ProjectGuide.md 문서를 먼저 읽고 현재 프로젝트 진행 상황과 코드 구조를 파악해 줘!`
+
+
+---
+
+## 25. 게임 종료 동결 시스템 & 줌 연동 배터리/가시거리 시스템 (2026.04.06 추가)
+
+### 게임 종료 연출 시 전체 동결
+
+- **`isGameEnding` 정적 플래그 (`KillCountManager`):** 미션 실패(점프 공격) 또는 미션 성공(마을 침략) 발생 시 즉시 true. `CameraController` 입력 전체 차단, `RaycastShooter.TryReload()`도 동일 플래그로 차단.
+- **점프 애니메이션 동기화 (`MutantAI.JumpAttackAndFailRoutine`):** `Time.timeScale = 0` 직전 `AnimatorUpdateMode.UnscaledTime` 전환 → 점프 정점에서 멈추도록 패널 호출 후 Normal 복구.
+
+### 줌 배터리 가속 소모 시스템
+
+- **배터리 자동 수명 연동 (`BatteryController.SetAutoInterval`):** 생존 목표 시간 기반으로 배터리 1칸 소모 주기 자동 계산 (고정값 제거). `StageSelectManager`에서 맵 생성 시 호출.
+- **줌 가시거리 확장:** 줌 진입 시 `RenderSettings.fogEndDistance *= zoomFogMultiplier`(기본 2.0). 줌 해제 시 원상복구.
+- **줌 드레인 깜빡임 개선 (`BatteryController`):**
+  - 기존: batteryCase만 SetActive 토글 → 배터리 방전 깜빡임과 시각 구분 불가
+  - 수정: 배터리 UI 전체(batteryCase + batteryCounts[] + lastBatteryCount)의 Image.color를 zoomDrainBlinkColor로 전환. 원본 색상은 캐싱 후 복구.
+  - Inspector 노출: zoomBlinkInterval(깜빡임 속도), zoomDrainBlinkColor(색상 피커)
+
+---
+
+## 26. 옥수수밭 레인 — CornSway 셰이더 & CornfieldTrigger 구현 (2026.04.06 추가)
+
+### 기획 개요
+3-Lane 시스템 좌측 레인. 뮤턴트가 옥수수밭을 통과할 때 풀 흔들림과 바스락 소리로 위치를 암시 → 플레이어의 예측샷 유도. 모바일 성능을 위해 파티클 없이 셰이더+트리거 방식으로 구현.
+
+### CornSway_URP 셰이더 (Assets/Shaders/CornSway.shader)
+
+- **URP 전용:** Built-in UnityCG.cginc 대신 Core.hlsl 사용. CBUFFER_START(UnityPerMaterial)로 SRP Batcher 호환.
+- **Alpha Clipping 모드:** Queue=AlphaTest, ZWrite On, Blend 없음. URP/Lit Opaque+AlphaClip과 동일 → 투명 PNG 텍스처가 기존 머티리얼처럼 선명하게 보임.
+- **2중 흔들림 구조:**
+  - 평시: sin(Time x SwaySpeed) x SwayAmount x UV.y (상시 미세 흔들림)
+  - 근접: sin(Time x ProximitySpeed + worldX) x ProximityAmount x proximity (뮤턴트 근처만 강하게)
+  - UV.y = rootFactor: 뿌리(0) 고정, 끝(1) 최대 흔들림
+  - proximity = saturate(1 - dist / ProximityRadius): 거리 기반 0~1 강도
+  - _MutantWorldPos.y = -9999이면 proximity = 0 (비활성 상태)
+- **ShaderLab 주의사항:** [Header()] 안 공백 금지, [Tooltip()] 안 한국어 금지 → 파서 에러 발생
+- **Inspector 주요 항목:** Alpha Clip Threshold(0~1), Color Tint(HDR), Sway Speed/Amount, Proximity Radius(수직 Plane이면 8~12 권장), Proximity Sway Amount
+
+### CornfieldTrigger.cs (Assets/Scripts/CornfieldTrigger.cs)
+
+- **다중 Renderer 지원:** cornRenderers[] 배열(최대 5개 Plane) + cornMats[] 인스턴스 배열로 각 Plane 독립 제어.
+- **중복 처리 방지:** HashSet<MutantAI>로 뮤턴트 11개 콜라이더의 중복 Trigger 이벤트 차단. MutantAI 단위로 1회만 처리.
+- **컴포넌트 탐색:** GetComponentInParent<MutantAI>() 사용. 콜라이더는 자식에, MutantAI는 최상단 부모에 있는 계층 구조 대응.
+- **Kinematic Rigidbody 자동 추가:** NavMeshAgent 뮤턴트는 Rigidbody가 없어 OnTriggerStay 미발동 → Awake()에서 CornfieldZone에 Kinematic Rb 자동 추가.
+- **SoundEmitter 자식 분리 (버그 수정):** AudioSource를 자식 오브젝트 SoundEmitter에 생성. soundEmitter.transform.position만 이동 → 부모 BoxCollider가 뮤턴트를 따라 이동하던 버그 해결.
+- **사운드 페이드아웃:** 뮤턴트 퇴장 시 FadeOutAndStop() 코루틴으로 볼륨 서서히 0 → 자연스러운 사운드 종료.
+- **레이어:** CornfieldZone → Ignore Raycast 레이어. 총 레이캐스트 차단 없이 Physics Trigger는 정상 작동.
+
+---
+**[다음에 AI를 부르실 때 사용할 프롬프트 예시]**
+`Assets 폴더 최상단에 있는 NightVisitor_ProjectGuide.md 문서를 먼저 읽고 현재 프로젝트 진행 상황과 코드 구조를 파악해 줘!`

@@ -1,6 +1,8 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.UI;
 
 public class BatteryController : MonoBehaviour
 {
@@ -40,6 +42,24 @@ public class BatteryController : MonoBehaviour
     // 추가: 이번 스테이지의 배터리 소모 배수
     private float currentDepleteRate = 1.0f;
 
+    // 줌 지속 시 추가 소모 배율 (기본 1.0 = 영향 없음)
+    private float zoomDrainBonus = 1.0f;
+    private Coroutine zoomBlinkCoroutine;
+
+    [Header("Zoom Drain Settings")]
+    [Tooltip("생존 시간 대비 배터리 수명 비율 (0.85 = 06:00 약 36초 전 방전)")]
+    public float autoTargetRatio = 0.85f;
+
+    [Header("Zoom Drain Blink Settings")]
+    [Tooltip("줄 드레인 중 깜빡임 간격 (초). 높을수록 느리게 깜빡임")]
+    public float zoomBlinkInterval = 0.3f;
+    [Tooltip("줄 드레인 중 배터리 UI를 얼마나 통지할 색상")]
+    public Color zoomDrainBlinkColor = new Color(1f, 0.55f, 0f, 1f); // 주황색 기본
+
+    // Image 캐시 (쳐음 호출 시 1회만 수집)
+    private Image[] allBatteryImages;
+    private Color[] originalBatteryColors;
+
     private void Awake()
     {
         if (Instance == null)
@@ -66,9 +86,119 @@ public class BatteryController : MonoBehaviour
         if (nVol != null) normalVolume = nVol;
     }
 
+    /// <summary>
+    /// 생존 목표 시간(초)을 기반으로 depleteInterval을 자동 계산합니다.
+    /// StageSelectManager에서 Map 2 게임 시작 시 호출합니다.
+    /// </summary>
+    public void SetAutoInterval(float survivalSeconds)
+    {
+        if (survivalSeconds <= 0f) return;
+        float targetLifetime = survivalSeconds * autoTargetRatio;
+        depleteInterval = targetLifetime / 3f;
+        Debug.Log($"[BatteryController] Auto interval: {depleteInterval:F1}s/칸 (목표 {survivalSeconds:F0}초 × {autoTargetRatio})");
+    }
+
+    /// <summary>
+    /// 줌 지속 시 배터리 가속 소모 ON/OFF.
+    /// CameraController에서 줌 0.8초 초과/해제 시 호출합니다.
+    /// </summary>
+    public void SetZoomDrainActive(bool active, float multiplier)
+    {
+        zoomDrainBonus = active ? multiplier : 1.0f;
+
+        if (active)
+        {
+            // 깜빡임 코루틴이 꺼져 있을 때만 새로 시작
+            if (zoomBlinkCoroutine == null)
+                zoomBlinkCoroutine = StartCoroutine(ZoomDrainBlinkRoutine());
+        }
+        else
+        {
+            if (zoomBlinkCoroutine != null)
+            {
+                StopCoroutine(zoomBlinkCoroutine);
+                zoomBlinkCoroutine = null;
+            }
+            // 모든 Image 색상을 원본으로 복구
+            RestoreBatteryColors();
+        }
+    }
+
+    /// <summary>
+    /// 배터리 UI 전체(케이스 + 모든 칸)의 Image 컴포넌트를 케시합니다.
+    /// </summary>
+    private void CacheBatteryImages()
+    {
+        if (allBatteryImages != null) return; // 이미 케시됨
+
+        var images = new List<Image>();
+
+        // 케이스와 그 안의 모든 Image 수집 (includeInactive: true)
+        if (batteryCase != null)
+            images.AddRange(batteryCase.GetComponentsInChildren<Image>(true));
+
+        if (batteryCounts != null)
+            foreach (var bc in batteryCounts)
+                if (bc != null) images.AddRange(bc.GetComponentsInChildren<Image>(true));
+
+        if (lastBatteryCount != null)
+            images.AddRange(lastBatteryCount.GetComponentsInChildren<Image>(true));
+
+        allBatteryImages = images.ToArray();
+
+        // 원본 색상 저장
+        originalBatteryColors = new Color[allBatteryImages.Length];
+        for (int i = 0; i < allBatteryImages.Length; i++)
+            if (allBatteryImages[i] != null)
+                originalBatteryColors[i] = allBatteryImages[i].color;
+    }
+
+    /// <summary>
+    /// 줄 드레인 중 배터리 UI 전체를 zoomDrainBlinkColor로 부드럽게 점멸하는 코루틴.
+    /// SetActive 토글 대신 색상 토글 방식 — 배터리 방전 깜빡임과 시각적으로 구분됩니다.
+    /// </summary>
+    private IEnumerator ZoomDrainBlinkRoutine()
+    {
+        CacheBatteryImages();
+        bool isHighlighted = false;
+
+        while (true)
+        {
+            isHighlighted = !isHighlighted;
+
+            if (allBatteryImages != null)
+            {
+                for (int i = 0; i < allBatteryImages.Length; i++)
+                {
+                    if (allBatteryImages[i] != null)
+                        allBatteryImages[i].color = isHighlighted
+                            ? zoomDrainBlinkColor
+                            : originalBatteryColors[i];
+                }
+            }
+
+            yield return new WaitForSeconds(zoomBlinkInterval);
+        }
+    }
+
+    /// <summary>
+    /// 모든 배터리 Image를 원본 색상으로 복구합니다.
+    /// </summary>
+    private void RestoreBatteryColors()
+    {
+        if (allBatteryImages == null) return;
+        for (int i = 0; i < allBatteryImages.Length; i++)
+            if (allBatteryImages[i] != null)
+                allBatteryImages[i].color = originalBatteryColors[i];
+    }
+
     public void ResetBattery()
     {
         StopAllCoroutines();
+
+        // 줌 드레인 상태 초기화
+        zoomDrainBonus = 1.0f;
+        zoomBlinkCoroutine = null;
         
         timer = 0f;
         currentDepleteIndex = 0;
@@ -119,7 +249,7 @@ public class BatteryController : MonoBehaviour
         if (isGameOver) return;
 
         // 배수를 곱해서 타이머를 가속/감속합니다
-        timer += Time.deltaTime * currentDepleteRate;
+        timer += Time.deltaTime * currentDepleteRate * zoomDrainBonus;
 
         // depleteInterval 마다 배터리 칸 소모
         if (timer >= depleteInterval)
