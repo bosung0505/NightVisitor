@@ -9,6 +9,8 @@ public class MutantAI : MonoBehaviour
     
     // 타격 횟수 추적
     private int hitCount = 0;
+    /// <summary>이 뮤턴트의 최대 체력 (누적 데미지 기준). MutantSpawner가 스폰 시 주입합니다.</summary>
+    private int maxHitPoints = 3;
     private bool isDead = false;
     private bool isReacting = false;
 
@@ -20,6 +22,25 @@ public class MutantAI : MonoBehaviour
     [Header("Revival Settings")]
     [Tooltip("체크 시 일정 스테이지부터는 죽어도 한 번 기어오는 기믹이 추가됩니다.")]
     public bool enableRevive = false;
+
+    /// <summary>
+    /// MutantSpawner가 스폰 직후 stageConfig.enableRevive 값을 주입하는 함수.
+    /// 인스펙터 기본값을 무시하고 스테이지 설정을 우선 적용합니다.
+    /// </summary>
+    public void SetRevive(bool value)
+    {
+        enableRevive = value;
+    }
+
+    /// <summary>
+    /// MutantSpawner가 스폰 직후 그룹별 최대 체력을 주입하는 함수.
+    /// 0 이하로 설정하면 기본값 3이 유지됩니다.
+    /// </summary>
+    public void SetMaxHitPoints(int hp)
+    {
+        if (hp > 0) maxHitPoints = hp;
+    }
+
     [Tooltip("가짜 죽음 상태에서 부활하기까지 세뇌시키는 화면 대기 시간 (초)")]
     public float reviveDelay = 2.5f;
     [Tooltip("헤드샷으로 죽어서 머리가 없는 상태로 부활했을 때의 느린 속도")]
@@ -359,9 +380,9 @@ public class MutantAI : MonoBehaviour
             }
             currentReactionCoroutine = StartCoroutine(ReactRoutine(hitCount));
         }
-        else if (hitCount >= 3)
+        else if (hitCount >= maxHitPoints)
         {
-            Die(isHeadshot, false); // 3대를 맞아 처음 쓰러질 때는 진짜 죽음(True Death) 플래그를 넘기지 않습니다. Die 내부에서 enableRevive 여부에 따라 심판.
+            Die(isHeadshot, false);
         }
     }
 

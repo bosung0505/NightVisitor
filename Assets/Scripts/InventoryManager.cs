@@ -86,6 +86,16 @@ public class InventoryManager : MonoBehaviour
         return null;
     }
 
+    /// <summary>
+    /// 현재 장착된 탄창(Mag)의 원본 데이터를 반환합니다 (아이콘/이름 표시 용도).
+    /// 탄창 수치(Ammo/Reloadable)는 MagazineUpgradeData에서 직접 읽으세요.
+    /// </summary>
+    public ShopItemData GetEquippedMagData()
+    {
+        if (equippedMagUI != null) return equippedMagUI.myItemData;
+        return null;
+    }
+
     private void Start()
     {
         // 시작할 때 정보 창 숨김

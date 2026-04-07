@@ -88,7 +88,8 @@ public class KillCountManager : MonoBehaviour
     private int targetKills = 0; // 이번 스테이지의 목표 킬 수
 
     // 글로벌 누적 골드 (앱을 끄면 날아가는 임시 저장소)
-    public static int currentSessionGold = 0;
+    // TODO: 테스트용 초기 골드. 업그레이드 UI 확인 후 0으로 복원할 것.
+    public static int currentSessionGold = 1000;
 
     private bool isCleared = false; // 클리어 여부 플래그
     private Coroutine hideCoroutine; // 현재 진행중인 숨김 코루틴

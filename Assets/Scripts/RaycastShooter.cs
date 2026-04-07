@@ -13,18 +13,15 @@ public class RaycastShooter : MonoBehaviour
     private void Awake()
     {
         if (Instance == null) Instance = this;
-        
-        // Awake 단계에서 초기 인스펙터 값을 저장해 둡니다. (StageSelectManager보다 먼저 세팅되기 위함)
-        originalMaxReloadableAmmo = maxReloadableAmmo;
-        currentStageMaxAmmo = originalMaxReloadableAmmo;
+
+        // 탄창 업그레이드 데이터에서 초기값 로드
+        maxAmmoPerMag   = MagazineUpgradeData.GetAmmoAtLevel(MagazineUpgradeData.CurrentLevel);
+        _initReloadable = MagazineUpgradeData.GetReloadableAtLevel(MagazineUpgradeData.CurrentLevel);
     }
 
     [Header("Ammo & Reload Settings")]
     public int maxAmmoPerMag = 5;
-    [Tooltip("총 예비 탄약량 (시작할 때 주어지는 탄약 총량)")]
-    public int maxReloadableAmmo = 30;
-    private int originalMaxReloadableAmmo; // 원래 설정된 기본 예비 탄약량 기억용
-    private int currentStageMaxAmmo;       // 이번 스테이지에 적용될 예비 탄약량
+    private int _initReloadable = 5; // 스테이지 시작 시 지급되는 예비 탄약 수 (MagazineUpgradeData에서 설정)
     
     private int currentAmmo;
     private int currentReloadableAmmo;
@@ -157,20 +154,15 @@ public class RaycastShooter : MonoBehaviour
     }
 
     /// <summary>
-    /// 스테이지 매니저가 이번 스테이지의 탄약 한도를 전달하는 함수
+    /// MagazineUpgradeData의 현재 레벨을 읽어 탄창 크기와 예비 탄약을 초기화합니다.
+    /// StageSelectManager.StartGame()에서 InitGunData() 이후에 호출됩니다.
     /// </summary>
-    public void InitAmmoLimit(int customLimit)
+    public void InitAmmoFromMag()
     {
-        if (customLimit < 0)
-        {
-            // 음수(-1)라면 기존 인스펙터의 디폴트값 사용
-            currentStageMaxAmmo = originalMaxReloadableAmmo;
-        }
-        else
-        {
-            // 양수(또는 0 제한)라면 해당 스테이지 전용 탄발 수 적용
-            currentStageMaxAmmo = customLimit;
-        }
+        int magLevel    = MagazineUpgradeData.CurrentLevel;
+        maxAmmoPerMag   = MagazineUpgradeData.GetAmmoAtLevel(magLevel);
+        _initReloadable = MagazineUpgradeData.GetReloadableAtLevel(magLevel);
+        ResetAmmo();
     }
 
     /// <summary>
@@ -181,23 +173,20 @@ public class RaycastShooter : MonoBehaviour
         if (gunData != null && gunData.category == ItemCategory.Gun)
         {
             currentGunDamage = gunData.gunDamage;
-            maxAmmoPerMag = gunData.maxAmmoInClip;
+            // ★ maxAmmoPerMag는 이제 MagazineUpgradeData에서 설정하므로 여기서 덮어쓰지 않습니다.
             shootSound = gunData.shootSound;
-            recoilUp = gunData.recoilUp;
+            recoilUp   = gunData.recoilUp;
             recoilSide = gunData.recoilSide;
-            
-            Debug.Log($"[총기 데이터 갱신] 데미지:{currentGunDamage}, 장탄수:{maxAmmoPerMag}, 반동:{recoilUp}");
+
+            Debug.Log($"[총기 데이터 갱신] 데미지:{currentGunDamage}, 반동:{recoilUp}");
         }
     }
 
     /// <summary>
     public void ResetAmmo()
     {
-        currentAmmo = maxAmmoPerMag;
-        
-        // 예비 탄약에서 기본 지급된 5성을 먼저 뺌
-        int startingReserve = currentStageMaxAmmo - maxAmmoPerMag;
-        currentReloadableAmmo = Mathf.Max(0, startingReserve);
+        currentAmmo           = maxAmmoPerMag;   // 탄창을 꽉 채운 상태로 시작
+        currentReloadableAmmo = _initReloadable; // 예비 탄약을 그대로 지급 (분할 없음)
 
         isReloading = false; // 혹시 재장전 중이었다면 취소 처리
         UpdateAmmoUI();

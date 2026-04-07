@@ -33,8 +33,26 @@ public struct StageConfig
     public bool ignoreSneakZone;
     [Tooltip("배터리 소모 속도 배수 (기본 1.0)")]
     public float batteryDepleteRate;
-    [Tooltip("이 스테이지에서 주어지는 총 예비 탄약 수 (음수면 기본 유지)")]
-    public int maxReloadableAmmo;
+}
+
+/// <summary>
+/// 하나의 스폰 이벤트 단위.
+/// 여러 prefab을 같은 delay로 묶으면 동시 스폰, 각각 다른 Group으로 분리하면 순차 스폰.
+/// </summary>
+[System.Serializable]
+public struct MutantSpawnGroup
+{
+    [Tooltip("스테이지 시작 후 몇 초 뒤에 이 그룹을 스폰할지 (0이면 즉시)")]
+    public float spawnDelay;
+
+    [Tooltip("이 그룹 뮤턴트들의 최대 체력\n바디샷=1데미지, 헤드샷=2데미지\n기본값: 0으로 두면 자동으로 3 적용\n예) 3 → 바디샷 3방 or 헤드샷2+바디샷1에 사망")]
+    public int maxHitPoints;
+
+    [Tooltip("생성할 뮤턴트 프리팹 배열 (동시 스폰 = 여러 개, 순차 = 1개씩 Group 분리)")]
+    public GameObject[] mutantPrefabs;
+
+    [Tooltip("각 뮤턴트의 생성 위치 (SpawnPoint 빈 오브젝트). prefabs 배열과 인덱스 1:1 매칭")]
+    public Transform[] spawnPoints;
 }
 
 [System.Serializable]
@@ -47,20 +65,22 @@ public struct StageConfig2
     [Tooltip("이 스테이지에서 생성할 맵 프리팹")]
     public GameObject mapPrefab;
 
-    [Header("Stage Rules")]
-    [Tooltip("이 스테이지의 목표 킬 수")]
-    public int targetKillCount;
+    [Header("Mutant Spawn Settings")]
+    [Tooltip("이 스테이지의 스폰 그룹 목록. Group마다 spawnDelay/프리팹/위치를 설정합니다.")]
+    public MutantSpawnGroup[] spawnGroups;
+
+    [Header("Revival Settings")]
+    [Tooltip("체크 시 이 스테이지의 모든 뮤턴트가 처음 죽을 때 부활(크롤링)합니다.")]
+    public bool enableRevive;
 
     [Header("Difficulty Settings")]
     [Tooltip("활성화할 디코이 여우 이름들")]
     public string[] activeDecoyNames;
-    [Tooltip("배터리 소모 속도 배수 (기본 1.0)")]
+    [Tooltip("배터리 소모 속도 배수 (기본 1.0 / 높을수록 빠르게 소모)")]
     public float batteryDepleteRate;
-    [Tooltip("총 예비 탄약 수 (음수면 기본 유지)")]
-    public int maxReloadableAmmo;
 
     [Header("Survival Settings")]
-    [Tooltip("생존 목표 시간 (현실 시간 분 기준, 예: 4면 4분 동안 버팀)")]
+    [Tooltip("현실 기준 생존 시간(분). 이 시간이 지나면 06:00 달성 → 미션 클리어")]
     public float survivalTimeMinutes;
 
     [Header("Camera Settings (Map 2 Only)")]
@@ -153,9 +173,10 @@ public class StageSelectManager : MonoBehaviour
         Vector2 defaultPitch = new Vector2(-70f, 70f);
         Vector2 defaultYaw = new Vector2(-80f, 80f);
 
-        StartGame(config.mapPrefab, config.targetKillCount, config.foxSpawnInterval, config.maxConcurrentFoxes, 
-                  config.activeSpawnPointNames, config.activeDecoyNames, config.ignoreSneakZone, 
-                  config.batteryDepleteRate, config.maxReloadableAmmo, null, defaultPitch, defaultYaw, 0f, false);
+        StartGame(config.mapPrefab, config.foxSpawnInterval, config.maxConcurrentFoxes,
+                  config.activeSpawnPointNames, config.activeDecoyNames, config.ignoreSneakZone,
+                  config.batteryDepleteRate, null, defaultPitch, defaultYaw, 0f, false,
+                  targetKillCountForMap1: config.targetKillCount);
     }
 
     // Map 2 실행용
@@ -172,15 +193,20 @@ public class StageSelectManager : MonoBehaviour
         Vector2 pLimit = config.pitchLimit == Vector2.zero ? new Vector2(-70f, 70f) : config.pitchLimit;
         Vector2 yLimit = config.yawLimit == Vector2.zero ? new Vector2(-80f, 80f) : config.yawLimit;
 
-        StartGame(config.mapPrefab, config.targetKillCount, defaultSpawnInterval, defaultMaxFoxes, 
-                  defaultSpawnPoints, config.activeDecoyNames, defaultIgnoreSneak, 
-                  config.batteryDepleteRate, config.maxReloadableAmmo, config.cameraSpawnPoint, pLimit, yLimit, config.survivalTimeMinutes, true);
+        StartGame(config.mapPrefab, defaultSpawnInterval, defaultMaxFoxes,
+                  defaultSpawnPoints, config.activeDecoyNames, defaultIgnoreSneak,
+                  config.batteryDepleteRate, config.cameraSpawnPoint, pLimit, yLimit,
+                  config.survivalTimeMinutes, isMap2: true,
+                  spawnGroups: config.spawnGroups, enableRevive: config.enableRevive);
     }
 
     // 통합 게임 시작 로직
-    private void StartGame(GameObject mapPrefab, int targetKillCount, float foxSpawnInterval, int maxConcurrentFoxes, 
-                           string[] activeSpawnPointNames, string[] activeDecoyNames, bool ignoreSneakZone, 
-                           float batteryDepleteRate, int maxReloadableAmmo, Transform camSpawn = null, Vector2 pLimit = default, Vector2 yLimit = default, float survivalTimeMinutes = 0f, bool isMap2 = false)
+    private void StartGame(GameObject mapPrefab, float foxSpawnInterval, int maxConcurrentFoxes,
+                           string[] activeSpawnPointNames, string[] activeDecoyNames, bool ignoreSneakZone,
+                           float batteryDepleteRate, Transform camSpawn = null, Vector2 pLimit = default, Vector2 yLimit = default,
+                           float survivalTimeMinutes = 0f, bool isMap2 = false,
+                           MutantSpawnGroup[] spawnGroups = null, bool enableRevive = false,
+                           int targetKillCountForMap1 = 0)
     {
         // 1. 패널 페이드 (마지막에 활성화되었던 패널을 끕니다)
         if (lastActiveStagePanel != null)
@@ -228,20 +254,20 @@ public class StageSelectManager : MonoBehaviour
 
         // =========================================================
 
-        // 탄약 및 무기 세팅
+        // 탄약 및 무기 세팅 (MagazineUpgradeData 기반으로 일괄 처리)
         if (RaycastShooter.Instance != null)
         {
-            int ammoLimit = maxReloadableAmmo;
-            RaycastShooter.Instance.InitAmmoLimit(ammoLimit);
-
+            // 1단계: 총기 데이터 (데미지/사운드/반동) 적용
             if (InventoryManager.Instance != null)
             {
                 ShopItemData equippedGun = InventoryManager.Instance.GetEquippedGunData();
                 if (equippedGun != null) RaycastShooter.Instance.InitGunData(equippedGun);
             }
 
+            // 2단계: 탄창 업그레이드 데이터로 ammo 초기화 (탄창크기 + 예비탄약 미분할 그대로 적용)
+            RaycastShooter.Instance.InitAmmoFromMag();
+
             // ★ 맵 프리팹의 startingVolume을 재장전 암전 볼륨으로 주입
-            // (인스펙터 연결 불필요 — 단일씬 아키텍처 대응)
             if (currentMapInfo != null)
             {
                 RaycastShooter.Instance.reloadDimVolume = currentMapInfo.startingVolume;
@@ -252,18 +278,35 @@ public class StageSelectManager : MonoBehaviour
         CleanUpActiveFoxes();
 
         // 킬 수 UI 및 미션 세팅
-        if (ingameTargetKillCountText != null)
-        {
-            ingameTargetKillCountText.text = targetKillCount.ToString();
-        }
-
         if (KillCountManager.Instance == null)
             KillCountManager.Instance = UnityEngine.Object.FindFirstObjectByType<KillCountManager>(UnityEngine.FindObjectsInactive.Include);
 
         if (KillCountManager.Instance != null)
         {
             if (!KillCountManager.Instance.gameObject.activeSelf) KillCountManager.Instance.gameObject.SetActive(true);
-            KillCountManager.Instance.InitMission(targetKillCount);
+
+            if (isMap2)
+            {
+                // Map 2: targetKillCount 없음 — InitMission(0)으로 킬 카운트 카운터만 리셋
+                KillCountManager.Instance.InitMission(0);
+            }
+            else
+            {
+                // Map 1 전용: targetKillCount UI 표시 및 미션 초기화
+                if (ingameTargetKillCountText != null)
+                    ingameTargetKillCountText.text = targetKillCountForMap1.ToString();
+                KillCountManager.Instance.InitMission(targetKillCountForMap1);
+            }
+        }
+
+        // ★ Map 2: 뮤턴트 스포너 초기화
+        if (isMap2 && currentInstantiatedMap != null)
+        {
+            MutantSpawner spawner = currentInstantiatedMap.GetComponentInChildren<MutantSpawner>();
+            if (spawner != null)
+                spawner.InitStage(spawnGroups, enableRevive);
+            else
+                Debug.LogWarning("[StageSelectManager] Map2 프리팹에 MutantSpawner 컴포넌트가 없습니다!");
         }
 
         // =========================================================
@@ -405,6 +448,13 @@ public class StageSelectManager : MonoBehaviour
         if (BatteryController.Instance != null) BatteryController.Instance.StopBattery();
         if (FoxManager.Instance != null) FoxManager.Instance.StopSpawning();
         if (SurvivalTimer.Instance != null) SurvivalTimer.Instance.StopTimer();
+
+        // ★ Map 2: 생성된 뮤턴트 클론 전부 정리
+        if (currentInstantiatedMap != null)
+        {
+            MutantSpawner spawner = currentInstantiatedMap.GetComponentInChildren<MutantSpawner>();
+            if (spawner != null) { spawner.StopSpawning(); spawner.ClearAllSpawnedMutants(); }
+        }
 
         // 1. 남은 클론 여우들 삭제
         CleanUpActiveFoxes();

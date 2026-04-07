@@ -373,5 +373,91 @@ New Input System 터치, Legacy 터치, 마우스 3가지 입력 경로 모두�
 - **레이어:** CornfieldZone → Ignore Raycast 레이어. 총 레이캐스트 차단 없이 Physics Trigger는 정상 작동.
 
 ---
+
+## 27. 탄창 업그레이드 시스템 — MagazineUpgradeData / MagazineUpgradeUI (2026.04.07 추가)
+
+### 기획 배경
+기존 스테이지별 고정 탄약 제한(`StageConfig.maxReloadableAmmo`)을 폐지하고, **골드를 소모해 영구적으로 탄창 능력치를 성장**시키는 업그레이드 시스템으로 전환.
+
+### MagazineUpgradeData.cs (전역 static 클래스)
+- **레벨 관리:** `CurrentLevel` (앱 세션 동안 유지, PlayerPrefs 저장 지원)
+- **스탯 계산:**
+  - `GetAmmoAtLevel(lv)` → `5 + (lv-1)/10` (10레벨당 +1 증가)
+  - `GetReloadableAtLevel(lv)` → `5 + (lv-1)` (레벨당 +1 증가)
+  - `GetUpgradeCost(lv)` → `((lv-1)/10 + 1) * 100` (10레벨 구간당 100 증가)
+- **골드 차감:** `TryUpgrade()` — `KillCountManager.currentSessionGold`에서 직접 차감
+
+### MagazineUpgradeUI.cs (인벤토리 Mag 패널 UI 컨트롤러)
+- Inspector 필드: 상단 화살표 **왼쪽** (현재값) / **오른쪽** (다음 레벨 미리보기) / 하단 현재 정보 각각 별도 TMP 연결
+- **숫자만 설정:** TMP에 라벨("Lv :", "Ammo :" 등)이 이미 존재 → 코드는 숫자만 덮어씀
+- `OnEnable()`에 `RefreshUI()` 호출 → 패널 열 때마다 자동 최신화
+- `upgradeButton.interactable` → 골드 부족 시 자동 그레이아웃
+- `OnUpgradeButtonClicked()` → Button OnClick에 연결
+
+### 기존 코드 수정 내역
+| 파일 | 변경 내용 |
+|---|---|
+| `StageConfig` / `StageConfig2` | `maxReloadableAmmo` 필드 완전 제거 |
+| `RaycastShooter.cs` | `InitAmmoLimit()` 제거 → `InitAmmoFromMag()` 추가 (MagazineUpgradeData 기반 초기화) |
+| `RaycastShooter.ResetAmmo()` | 기존 `currentStageMaxAmmo - maxAmmoPerMag` 분할 방식 제거 → `_initReloadable` 직접 사용 (5/5 그대로 시작) |
+| `RaycastShooter.InitGunData()` | `maxAmmoPerMag = gunData.maxAmmoInClip` 제거 (탄창 크기는 Mag 데이터가 결정) |
+| `StageSelectManager.StartGame()` | ammo 초기화 순서: `InitGunData()` (데미지/사운드/반동) → `InitAmmoFromMag()` (탄창/예비탄약) |
+| `InventoryManager.cs` | `GetEquippedMagData()` 함수 추가 |
+
+### 탄약 고갈 게임오버
+기존 `RaycastShooter` 내 탄약 소진 시 게임오버 로직은 **그대로 유지**. 스테이지별 제한을 없앤 것이지 고갈 게임오버를 없앤 게 아님.
+
+---
+
+## 28. Map 2 스테이지 스폰 시스템 — MutantSpawner / StageConfig2 개편 (2026.04.07~08 추가)
+
+### 기획 배경
+Map 2의 모든 스테이지 클리어 조건 = **06:00까지 생존** (타이머 기반 단일 조건). `targetKillCount` 완전 제거.
+
+### 핵심 구조체 — MutantSpawnGroup (StageSelectManager.cs 상단 선언)
+```csharp
+public struct MutantSpawnGroup
+{
+    float spawnDelay;     // 스테이지 시작 후 몇 초 뒤 발동 (0 = 즉시)
+    int   maxHitPoints;   // 이 그룹 뮤턴트들의 최대 체력 (0이면 기본값 3 자동 적용)
+    GameObject[] mutantPrefabs;  // 생성할 프리팹 배열 (동시 스폰 = 여러 개)
+    Transform[]  spawnPoints;    // 각 프리팹의 스폰 위치 (인덱스 1:1 매칭)
+}
+```
+- **동시 스폰:** 같은 Group에 여러 prefab → 동시 등장
+- **순차 스폰:** 각기 다른 Group, spawnDelay 다르게 → 시간차 등장
+
+### StageConfig2 구조체 개편
+| 추가 | 제거 |
+|---|---|
+| `MutantSpawnGroup[] spawnGroups` | `targetKillCount` |
+| `bool enableRevive` (스테이지 전체 부활 체크박스) | `maxReloadableAmmo` (이미 이전 세션 제거) |
+
+### MutantSpawner.cs (신규, Map2 프리팹 자식 오브젝트에 부착)
+- **`InitStage(spawnGroups, enableRevive)`**: `StageSelectManager.StartGame()`에서 Map2 진입 시 호출
+  - 이전 스테이지 뮤턴트 전부 정리 → spawnDelay 오름차순 정렬 → 코루틴으로 순차 대기 후 `Instantiate`
+  - 스폰한 뮤턴트에 `MutantAI.SetRevive()` / `MutantAI.SetMaxHitPoints()` 주입
+- **`StopSpawning()` + `ClearAllSpawnedMutants()`**: `ReturnToMap()` 시 호출 → 클론 완전 삭제
+- 스폰 대상: Project 창의 `.prefab` 파일 (Hierarchy 오브젝트 X)
+
+### MutantAI.cs 추가 함수
+- **`SetRevive(bool value)`**: MutantSpawner가 스폰 직후 `enableRevive` 주입
+- **`SetMaxHitPoints(int hp)`**: 그룹별 최대 체력 주입, `hitCount >= maxHitPoints` 조건으로 사망 판정
+  - 기본값: `maxHitPoints = 3` (바디샷 1데미지 / 헤드샷 2데미지)
+  - 예: `maxHitPoints = 2` → 헤드샷 1발 즉사 / 바디샷 2발 사망
+
+### Unity 에디터 세팅
+```
+[Map2_Prefab]
+ ├── [MutantSpawner]        ← MutantSpawner.cs 부착
+ ├── [SpawnPoints]
+ │   ├── SpawnPoint_Left
+ │   ├── SpawnPoint_Center
+ │   └── SpawnPoint_Right
+ ├── VillageEntrance
+ └── VillageInvasion
+```
+
+---
 **[다음에 AI를 부르실 때 사용할 프롬프트 예시]**
 `Assets 폴더 최상단에 있는 NightVisitor_ProjectGuide.md 문서를 먼저 읽고 현재 프로젝트 진행 상황과 코드 구조를 파악해 줘!`
