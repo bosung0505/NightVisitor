@@ -13,7 +13,7 @@ public class MutantSpawner : MonoBehaviour
 {
     public static MutantSpawner Instance;
 
-    private bool enableReviveForStage = false;
+    private bool loopWavesForStage = false;
     private Coroutine spawnCoroutine;
     private List<GameObject> spawnedMutants = new List<GameObject>();
 
@@ -28,11 +28,11 @@ public class MutantSpawner : MonoBehaviour
     /// StageSelectManager가 스테이지 시작 시 호출합니다.
     /// 이전 뮤턴트를 정리하고 새 스폰 코루틴을 시작합니다.
     /// </summary>
-    public void InitStage(MutantSpawnGroup[] groups, bool reviveEnabled)
+    public void InitStage(MutantSpawnGroup[] groups, bool loopWaves = false)
     {
         ClearAllSpawnedMutants();
 
-        enableReviveForStage = reviveEnabled;
+        loopWavesForStage = loopWaves;
 
         if (spawnCoroutine != null) StopCoroutine(spawnCoroutine);
 
@@ -49,20 +49,29 @@ public class MutantSpawner : MonoBehaviour
         // spawnDelay 오름차순 정렬 후 순서대로 처리
         System.Array.Sort(groups, (a, b) => a.spawnDelay.CompareTo(b.spawnDelay));
 
-        float elapsed = 0f;
-
-        foreach (MutantSpawnGroup group in groups)
+        while (true)
         {
-            // 이전 그룹 이후 남은 대기 시간만 추가 대기
-            float waitTime = group.spawnDelay - elapsed;
-            if (waitTime > 0f)
+            float elapsed = 0f;
+
+            foreach (MutantSpawnGroup group in groups)
             {
-                yield return new WaitForSeconds(waitTime);
-                elapsed += waitTime;
+                // 이전 그룹 이후 남은 대기 시간만 추가 대기
+                float waitTime = group.spawnDelay - elapsed;
+                if (waitTime > 0f)
+                {
+                    yield return new WaitForSeconds(waitTime);
+                    elapsed += waitTime;
+                }
+
+                // 그룹 내 모든 뮤턴트 동시 스폰
+                SpawnGroup(group);
             }
 
-            // 그룹 내 모든 뮤턴트 동시 스폰
-            SpawnGroup(group);
+            // 루프 설정이 꺼져 있으면 코루틴을 정상 종료합니다.
+            if (!loopWavesForStage) break;
+
+            // 루프 설정이 켜져 있으면 배열 1바퀴 소환이 끝난 뒤 숨통을 트일 10초 휴식 후 다음 루프 재시작
+            yield return new WaitForSeconds(10f);
         }
 
         spawnCoroutine = null;
@@ -84,17 +93,19 @@ public class MutantSpawner : MonoBehaviour
             GameObject obj = Instantiate(group.mutantPrefabs[i], pt.position, pt.rotation);
             spawnedMutants.Add(obj);
 
-            // ★ 스테이지 설정의 enableRevive / maxHitPoints 주입
+            // ★ 스테이지/그룹 설정의 각종 속성 주입
             MutantAI ai = obj.GetComponent<MutantAI>();
             if (ai != null)
             {
-                ai.SetRevive(enableReviveForStage);
+                ai.SetRevive(group.enableRevive); // 스테이지 공통에서 그룹 개별 방식으로 변경
                 // 0이면 기본값 3 자동 적용
                 int hp = group.maxHitPoints > 0 ? group.maxHitPoints : 3;
                 ai.SetMaxHitPoints(hp);
+
+                ai.startAsRunner = group.startRunning; // 질주 러너 설정 주입
             }
 
-            Debug.Log($"[MutantSpawner] '{group.mutantPrefabs[i].name}' 스폰 완료 at {pt.name} | enableRevive={enableReviveForStage}");
+            Debug.Log($"[MutantSpawner] '{group.mutantPrefabs[i].name}' 스폰 완료 at {pt.name} | enableRevive={group.enableRevive} | startAsRunner={group.startRunning}");
         }
     }
 

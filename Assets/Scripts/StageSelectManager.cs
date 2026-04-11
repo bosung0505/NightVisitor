@@ -53,6 +53,12 @@ public struct MutantSpawnGroup
 
     [Tooltip("각 뮤턴트의 생성 위치 (SpawnPoint 빈 오브젝트). prefabs 배열과 인덱스 1:1 매칭")]
     public Transform[] spawnPoints;
+
+    [Tooltip("체크 시 이 그룹에 속한 뮤턴트는 스폰되자마자 걷기를 생략하고 침략 포인트로 전력 질주합니다.")]
+    public bool startRunning;
+
+    [Tooltip("체크 시 이 그룹에 속한 뮤턴트가 처음 죽을 때 부활(크롤링)합니다.")]
+    public bool enableRevive;
 }
 
 [System.Serializable]
@@ -68,10 +74,8 @@ public struct StageConfig2
     [Header("Mutant Spawn Settings")]
     [Tooltip("이 스테이지의 스폰 그룹 목록. Group마다 spawnDelay/프리팹/위치를 설정합니다.")]
     public MutantSpawnGroup[] spawnGroups;
-
-    [Header("Revival Settings")]
-    [Tooltip("체크 시 이 스테이지의 모든 뮤턴트가 처음 죽을 때 부활(크롤링)합니다.")]
-    public bool enableRevive;
+    [Tooltip("체크 시 스폰 그룹이 끝났을 때 10초 뒤 처음부터 무한 반복 스폰합니다.")]
+    public bool loopWaves;
 
     [Header("Difficulty Settings")]
     [Tooltip("활성화할 디코이 여우 이름들")]
@@ -197,7 +201,8 @@ public class StageSelectManager : MonoBehaviour
                   defaultSpawnPoints, config.activeDecoyNames, defaultIgnoreSneak,
                   config.batteryDepleteRate, config.cameraSpawnPoint, pLimit, yLimit,
                   config.survivalTimeMinutes, isMap2: true,
-                  spawnGroups: config.spawnGroups, enableRevive: config.enableRevive);
+                  spawnGroups: config.spawnGroups,
+                  loopSpawnWaves: config.loopWaves);
     }
 
     // 통합 게임 시작 로직
@@ -205,8 +210,8 @@ public class StageSelectManager : MonoBehaviour
                            string[] activeSpawnPointNames, string[] activeDecoyNames, bool ignoreSneakZone,
                            float batteryDepleteRate, Transform camSpawn = null, Vector2 pLimit = default, Vector2 yLimit = default,
                            float survivalTimeMinutes = 0f, bool isMap2 = false,
-                           MutantSpawnGroup[] spawnGroups = null, bool enableRevive = false,
-                           int targetKillCountForMap1 = 0)
+                           MutantSpawnGroup[] spawnGroups = null,
+                           int targetKillCountForMap1 = 0, bool loopSpawnWaves = false)
     {
         // 1. 패널 페이드 (마지막에 활성화되었던 패널을 끕니다)
         if (lastActiveStagePanel != null)
@@ -304,7 +309,7 @@ public class StageSelectManager : MonoBehaviour
         {
             MutantSpawner spawner = currentInstantiatedMap.GetComponentInChildren<MutantSpawner>();
             if (spawner != null)
-                spawner.InitStage(spawnGroups, enableRevive);
+                spawner.InitStage(spawnGroups, loopSpawnWaves);
             else
                 Debug.LogWarning("[StageSelectManager] Map2 프리팹에 MutantSpawner 컴포넌트가 없습니다!");
         }

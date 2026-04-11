@@ -19,6 +19,12 @@ public class MutantAI : MonoBehaviour
     public enum MutantPhase { ToEntrance, ToInvasion, ChasePlayer, Crawling }
     private MutantPhase currentPhase = MutantPhase.ToEntrance;
 
+    [Header("Decoy Settings")]
+    [Tooltip("체크 시 이 뮤턴트는 마을 침략 대신 지정된 큐브로 향하고 도달하면 스스로 사라집니다.")]
+    public bool isDecoy = false;
+    [Tooltip("디코이가 타겟으로 삼을 목적지 큐브의 이름 (예: DecoyDest_1). 빈칸이면 작동하지 않습니다.")]
+    public string decoyDestinationName = "";
+
     [Header("Revival Settings")]
     [Tooltip("체크 시 일정 스테이지부터는 죽어도 한 번 기어오는 기믹이 추가됩니다.")]
     public bool enableRevive = false;
@@ -56,6 +62,9 @@ public class MutantAI : MonoBehaviour
     [Header("Revival Animation Triggers")]
     public string animSlowCrawlTrigger = "Crawl_Slow";
     public string animFastCrawlTrigger = "Crawl_Fast";
+
+    [HideInInspector]
+    public bool startAsRunner = false;
 
     // 실제 사망인지 가짜 사망인지 구분하는 변수
     private bool hasAlreadyRevived = false;
@@ -142,16 +151,41 @@ public class MutantAI : MonoBehaviour
         if(agent != null) agent.speed = walkSpeed;
 
         // 씬에서 목적지를 이름으로 자동 탐색
-        GameObject entranceObj = GameObject.Find("VillageEntrance");
+        GameObject entranceObj = null;
+        if (isDecoy && !string.IsNullOrEmpty(decoyDestinationName))
+        {
+            entranceObj = GameObject.Find(decoyDestinationName);
+            if (entranceObj == null) Debug.LogWarning($"[MutantAI] 디코이 목적지인 '{decoyDestinationName}' 매시를 씬에서 찾을 수 없습니다!");
+        }
+        else
+        {
+            entranceObj = GameObject.Find("VillageEntrance");
+        }
+
         GameObject invasionObj = GameObject.Find("VillageInvasion");
 
         if (entranceObj != null) villageEntrance = entranceObj.transform;
         if (invasionObj != null) villageInvasion = invasionObj.transform;
 
-        // 시작 시 VillageEntrance를 향해 가다서다 반복
-        if (villageEntrance != null)
+        // 시작 시 분기 처리 (기존 걷기 루프 vs 즉시 질주)
+        if (startAsRunner)
         {
-            phase1Coroutine = StartCoroutine(IdleWalkRoutine());
+            currentPhase = MutantPhase.ToInvasion;
+            if (agent != null) agent.speed = runSpeed;
+            isChaseRunning = true; // Update에서 걷기 애니메이션이 덮어씌워지는 것 방지
+            if (animator != null)
+            {
+                animator.SetBool(animWalkBool, false);
+                animator.SetTrigger(animRunTrigger);
+            }
+        }
+        else
+        {
+            // 시작 시 VillageEntrance를 향해 가다서다 반복
+            if (villageEntrance != null)
+            {
+                phase1Coroutine = StartCoroutine(IdleWalkRoutine());
+            }
         }
     }
 
@@ -192,7 +226,8 @@ public class MutantAI : MonoBehaviour
         // 죽었거나, 리액션 중이거나, 요원이 없으면 이동 로직 전체 무시
         if (isDead || isReacting || agent == null) return;
 
-        if (hitCount == 0)
+        // 피격 혹은 어그로가 끌려 플레이어를 추적하는 상태가 아닐 때만 원래 목적지 판정 수행
+        if (currentPhase == MutantPhase.ToEntrance || currentPhase == MutantPhase.ToInvasion)
         {
             // --- 1. 2D 평면 거리 기반(Distance) 방어선 도달 판정 (Y축 높이 차이 무시) ---
             if (currentPhase == MutantPhase.ToEntrance && villageEntrance != null)
@@ -204,6 +239,13 @@ public class MutantAI : MonoBehaviour
                 // 넉넉하게 반경 4.5m 이내에 들어오면 1차 큐브 도착 완료!
                 if (Vector2.Distance(monsterPos2D, entrancePos2D) < 3f)
                 {
+                    if (isDecoy)
+                    {
+                        // 디코이가 목적지에 무사히 도착했으므로 맵에서 조용히 사라짐
+                        Destroy(gameObject);
+                        return; // 아래의 Update 로직 더 이상 실행 안 함
+                    }
+
                     currentPhase = MutantPhase.ToInvasion;
                     if (phase1Coroutine != null) 
                     {
@@ -238,7 +280,8 @@ public class MutantAI : MonoBehaviour
                 {
                     agent.isStopped = false;
                     MoveToTarget(villageInvasion.position);
-                    animator.SetBool(animWalkBool, true);
+                    // 이미 뛰고 있는 러너일 경우에는 걷기 애니메이션을 덮어씌우지 않음
+                    if (!isChaseRunning) animator.SetBool(animWalkBool, true);
                 }
             }
         }
