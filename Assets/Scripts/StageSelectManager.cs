@@ -13,6 +13,8 @@ public struct StageConfig
     [Header("Map Settings - New")]
     [Tooltip("이 스테이지에서 생성할 맵 프리팹 (Project 창에서 드래그)")]
     public GameObject mapPrefab;
+    [Tooltip("체크 시 카메라에 붙박혀 있는 RainParticles(비) 효과가 활성화됩니다.")]
+    public bool enableRain;
 
     [Header("Stage Rules")]
     [Tooltip("이 스테이지의 목표 킬 수")]
@@ -70,6 +72,8 @@ public struct StageConfig2
     [Header("Map Settings")]
     [Tooltip("이 스테이지에서 생성할 맵 프리팹")]
     public GameObject mapPrefab;
+    [Tooltip("체크 시 카메라에 붙박혀 있는 RainParticles(비) 효과가 활성화됩니다.")]
+    public bool enableRain;
 
     [Header("Mutant Spawn Settings")]
     [Tooltip("이 스테이지의 스폰 그룹 목록. Group마다 spawnDelay/프리팹/위치를 설정합니다.")]
@@ -180,7 +184,7 @@ public class StageSelectManager : MonoBehaviour
         StartGame(config.mapPrefab, config.foxSpawnInterval, config.maxConcurrentFoxes,
                   config.activeSpawnPointNames, config.activeDecoyNames, config.ignoreSneakZone,
                   config.batteryDepleteRate, null, defaultPitch, defaultYaw, 0f, false,
-                  targetKillCountForMap1: config.targetKillCount);
+                  targetKillCountForMap1: config.targetKillCount, enableRain: config.enableRain);
     }
 
     // Map 2 실행용
@@ -202,16 +206,17 @@ public class StageSelectManager : MonoBehaviour
                   config.batteryDepleteRate, config.cameraSpawnPoint, pLimit, yLimit,
                   config.survivalTimeMinutes, isMap2: true,
                   spawnGroups: config.spawnGroups,
-                  loopSpawnWaves: config.loopWaves);
+                  loopSpawnWaves: config.loopWaves,
+                  enableRain: config.enableRain);
     }
 
-    // 통합 게임 시작 로직
     private void StartGame(GameObject mapPrefab, float foxSpawnInterval, int maxConcurrentFoxes,
                            string[] activeSpawnPointNames, string[] activeDecoyNames, bool ignoreSneakZone,
                            float batteryDepleteRate, Transform camSpawn = null, Vector2 pLimit = default, Vector2 yLimit = default,
                            float survivalTimeMinutes = 0f, bool isMap2 = false,
                            MutantSpawnGroup[] spawnGroups = null,
-                           int targetKillCountForMap1 = 0, bool loopSpawnWaves = false)
+                           int targetKillCountForMap1 = 0, bool loopSpawnWaves = false,
+                           bool enableRain = false)
     {
         // 1. 패널 페이드 (마지막에 활성화되었던 패널을 끕니다)
         if (lastActiveStagePanel != null)
@@ -399,6 +404,20 @@ public class StageSelectManager : MonoBehaviour
             {
                 camController.SetCameraPoseAndLimits(camSpawn, pLimit, yLimit);
             }
+
+            // 비 파티클 (RainParticles) 활성화 여부 및 사운드 재생
+            Transform rainTransform = Camera.main.transform.Find("RainParticles");
+            if (rainTransform != null)
+            {
+                rainTransform.gameObject.SetActive(enableRain);
+                
+                AudioSource rainAudio = rainTransform.GetComponent<AudioSource>();
+                if (rainAudio != null)
+                {
+                    if (enableRain) rainAudio.Play();
+                    else rainAudio.Stop();
+                }
+            }
         }
 
         // Map 2의 경우 생존 타이머 시작
@@ -474,6 +493,15 @@ public class StageSelectManager : MonoBehaviour
         {
             CameraController camController = Camera.main.GetComponent<CameraController>();
             if (camController != null) camController.ForceZoomOff();
+
+            // 맵으로 돌아갈 땐 비 무조건 끄기 및 사운드 정지
+            Transform rainTransform = Camera.main.transform.Find("RainParticles");
+            if (rainTransform != null)
+            {
+                rainTransform.gameObject.SetActive(false);
+                AudioSource rainAudio = rainTransform.GetComponent<AudioSource>();
+                if (rainAudio != null) rainAudio.Stop();
+            }
         }
 
         Time.timeScale = 1f;

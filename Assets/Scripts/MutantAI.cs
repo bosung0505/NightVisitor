@@ -139,6 +139,8 @@ public class MutantAI : MonoBehaviour
 
     private bool isChaseRunning = false;
     private bool hasTriggeredAttack = false;
+    private bool isFullyAlerted = false; // 이미 완전히 분노/추적 중인지 여부
+    private bool hasScreamedFromHit = false; // 맞아서 스크림을 한 적이 있는지 여부
     private Coroutine currentReactionCoroutine; // 연사 덮어쓰기 로직을 위한 보관함
     private AudioSource audioSource; // 비명 소리를 발생시킬 자체 스피커
 
@@ -173,6 +175,7 @@ public class MutantAI : MonoBehaviour
             currentPhase = MutantPhase.ToInvasion;
             if (agent != null) agent.speed = runSpeed;
             isChaseRunning = true; // Update에서 걷기 애니메이션이 덮어씌워지는 것 방지
+            isFullyAlerted = true; // 시작부터 분노 고정
             if (animator != null)
             {
                 animator.SetBool(animWalkBool, false);
@@ -266,7 +269,7 @@ public class MutantAI : MonoBehaviour
                 {
                     // ★ 마을 침략 성공 — 입력 차단 플래그 먼저 ON
                     KillCountManager.isGameEnding = true;
-                    if (KillCountManager.Instance != null) KillCountManager.Instance.ShowMissionFailedPanel();
+                    if (Map2ResultManager.Instance != null) Map2ResultManager.Instance.ShowVillageInvadedPanel("");
                     if (agent != null) agent.isStopped = true;
                     animator.SetBool(animWalkBool, false);
                     this.enabled = false; 
@@ -336,6 +339,7 @@ public class MutantAI : MonoBehaviour
                     if (!isChaseRunning && !isReacting)
                     {
                         isChaseRunning = true;
+                        isFullyAlerted = true; // 플레이어를 명확히 인지하고 달리는 상태
                         animator.SetBool(animWalkBool, false);
                         animator.SetTrigger(animRunTrigger);
                     }
@@ -403,8 +407,18 @@ public class MutantAI : MonoBehaviour
 
         hitCount += damage;
 
-        // 피격 시 무조건 플레이어 추적으로 노선 변경
-        if (currentPhase != MutantPhase.ChasePlayer)
+        if (hitCount >= maxHitPoints)
+        {
+            if (currentReactionCoroutine != null) StopCoroutine(currentReactionCoroutine);
+            Die(isHeadshot, false);
+            return;
+        }
+
+        bool wasNotChasing = (currentPhase != MutantPhase.ChasePlayer);
+        bool isRunner = (startAsRunner || isChaseRunning || (agent != null && agent.speed >= runSpeed));
+
+        // 피격 시 플레이어 추적으로 노선 변경
+        if (wasNotChasing)
         {
             currentPhase = MutantPhase.ChasePlayer;
             if (phase1Coroutine != null) 
@@ -414,18 +428,19 @@ public class MutantAI : MonoBehaviour
             }
         }
 
-        if (hitCount == 1 || hitCount == 2)
+        // 냅다 뛰는 애가 맞아서 타겟을 바꿀 때, 빙 돌아오는 관성(Steering)을 방지하는 직각 턴 리액션
+        if (wasNotChasing && isRunner && !hasScreamedFromHit)
         {
-            // 만약 1번 맞고 두리번거리고 있던 도중에 또 맞았다면(연사), 두리번 모션을 강제 취소시킵니다.
-            if (currentReactionCoroutine != null)
-            {
-                StopCoroutine(currentReactionCoroutine);
-            }
-            currentReactionCoroutine = StartCoroutine(ReactRoutine(hitCount));
+            hasScreamedFromHit = true;
+            if (currentReactionCoroutine != null) StopCoroutine(currentReactionCoroutine);
+            currentReactionCoroutine = StartCoroutine(HitScreamAndTurnRoutine());
         }
-        else if (hitCount >= maxHitPoints)
+        else if ((hitCount == 1 || hitCount == 2) && !isFullyAlerted && !hasScreamedFromHit)
         {
-            Die(isHeadshot, false);
+            if (hitCount >= 2) isFullyAlerted = true;
+
+            if (currentReactionCoroutine != null) StopCoroutine(currentReactionCoroutine);
+            currentReactionCoroutine = StartCoroutine(ReactRoutine(hitCount));
         }
     }
 
@@ -439,6 +454,7 @@ public class MutantAI : MonoBehaviour
         if(agent != null) 
         {
             agent.isStopped = true;
+            agent.velocity = Vector3.zero; // 물리적 관성 즉시 억제!!
             agent.updateRotation = false; // 제자리 리액션 도중 몸이 꼬이지 않도록 엔진 회전 잠금
         }
 
@@ -516,6 +532,54 @@ public class MutantAI : MonoBehaviour
         currentReactionCoroutine = null; // 완전히 끝났으므로 비워줌
     }
 
+    private IEnumerator HitScreamAndTurnRoutine()
+    {
+        isReacting = true;
+        isFullyAlerted = true; 
+        
+        animator.SetBool(animWalkBool, false);
+        
+        // ★ 관성 제거 및 즉각 정지
+        if (agent != null) 
+        {
+            agent.isStopped = true;
+            agent.velocity = Vector3.zero; 
+            agent.updateRotation = false;
+        }
+
+        // 즉시 카메라 쪽으로 몸을 돌려 고정
+        if (targetCamera != null)
+        {
+            Vector3 direction = (targetCamera.position - transform.position).normalized;
+            direction.y = 0;
+            if (direction != Vector3.zero) transform.rotation = Quaternion.LookRotation(direction);
+        }
+
+        animator.SetTrigger(animScreamTrigger);
+        if (audioSource != null && screamClip != null) audioSource.PlayOneShot(screamClip);
+
+        BroadcastAggro();
+
+        yield return new WaitForSeconds(screamDuration);
+
+        if (!isDead)
+        {
+            if(agent != null) 
+            {
+                agent.isStopped = false;
+                agent.updateRotation = true;
+                agent.velocity = Vector3.zero; // 출발 가속도 초기화 보장
+                agent.speed = runSpeed;
+            }
+            
+            isChaseRunning = true;
+            animator.SetTrigger(animRunTrigger);
+        }
+
+        isReacting = false;
+        currentReactionCoroutine = null;
+    }
+
     private IEnumerator JumpAttackAndFailRoutine()
     {
         // ★ 1. 점프 시작 즉시: 입력 차단 + 애니메이터를 UnscaledTime으로 전환
@@ -566,9 +630,9 @@ public class MutantAI : MonoBehaviour
         }
 
         // 3. 게임 오버(임무 실패) 패널 호출
-        if (KillCountManager.Instance != null)
+        if (Map2ResultManager.Instance != null)
         {
-            KillCountManager.Instance.ShowMissionFailedPanel();
+            Map2ResultManager.Instance.ShowYouDiedPanel();
         }
 
         // ★ 패널 표시로 timeScale=0이 된 순간, 애니메이터를 Normal 모드로 복구
@@ -647,7 +711,7 @@ public class MutantAI : MonoBehaviour
         // --- 킬 수 오르기 처리 (영구 사망인 경우에만!) ---
         if (isFinalDeath)
         {
-            if (KillCountManager.Instance != null) KillCountManager.Instance.AddKill();
+            if (Map2ResultManager.Instance != null) Map2ResultManager.Instance.AddKill();
             
             // 모든 콜라이더 완전 삭제 처리 (영원히 상호작용 불가능, 시체로서 밟지 못하게)
             Collider[] colliders = GetComponentsInChildren<Collider>();
@@ -771,6 +835,7 @@ public class MutantAI : MonoBehaviour
         // 옵션 B 적용: 죽었거나, 죽은 척(가짜 죽음 대기) 중이거나, 이미 쫓고 있는 등 한가하지 않은 상태면 무지성 100% 무시합니다.
         if (isDead || isReacting || currentPhase == MutantPhase.ChasePlayer || currentPhase == MutantPhase.Crawling) return;
 
+        isFullyAlerted = true; // 어그로를 듣는 순간 완전 분노 상태로 예약
         StartCoroutine(AggroReactionRoutine());
     }
 
@@ -787,6 +852,8 @@ public class MutantAI : MonoBehaviour
 
         // 1. 유저 요청: 1초 동안 어리둥절하게 그 자리에서 소름돋는 정적(얼음)
         yield return new WaitForSeconds(1.0f);
+
+        if (isDead) { isReacting = false; yield break; }
 
         // 2. 시간이 지나면 플레이어(카메라)를 홱 쳐다봄
         if (targetCamera == null)
@@ -815,6 +882,8 @@ public class MutantAI : MonoBehaviour
 
         // 포효 사운드 클립/애니메이션 길이만큼 대기
         yield return new WaitForSeconds(screamDuration);
+
+        if (isDead) { isReacting = false; yield break; }
 
         // 4. 모션이 끝나고 살아있다면 즉시 미친 듯이 돌진!
         if (!isDead)

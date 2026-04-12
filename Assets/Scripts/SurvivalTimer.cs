@@ -107,9 +107,9 @@ public class SurvivalTimer : MonoBehaviour
 
         UpdateUIText(); // 정확히 06:00 으로 텍스트 고정
         
-        if (KillCountManager.Instance != null)
+        if (Map2ResultManager.Instance != null)
         {
-            KillCountManager.Instance.ShowMissionClearPanel();
+            Map2ResultManager.Instance.ShowSurvivePanel();
         }
     }
 }

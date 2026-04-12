@@ -1470,6 +1470,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cea7313765d14f34eb38a60943e0d8c8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  isDecoy: 0
+  decoyDestinationName: 
   enableRevive: 1
   reviveDelay: 10
   slowCrawlSpeed: 4
@@ -1478,6 +1480,7 @@ MonoBehaviour:
   animDeathStateName: Dying
   animSlowCrawlTrigger: Crawl_Slow
   animFastCrawlTrigger: Crawl_Fast
+  startAsRunner: 0
   walkDurationMin: 4
   walkDurationMax: 8
   idleDurationMin: 1
@@ -1504,7 +1507,7 @@ MonoBehaviour:
   headBone: {fileID: 1748469316864323518}
   neckBloodParticlePrefab: {fileID: 4003828172818114288}
   neckBloodDuration: 3
-  aggroRadius: 25
+  aggroRadius: 40
 --- !u!195 &6494392104658839890
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -1540,8 +1543,8 @@ AudioSource:
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
   m_PlayOnAwake: 0
-  m_Volume: 1
-  m_Pitch: 1
+  m_Volume: 0.9
+  m_Pitch: 0.75
   Loop: 0
   Mute: 0
   Spatialize: 0

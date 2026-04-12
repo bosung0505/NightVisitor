@@ -223,9 +223,12 @@ public class RaycastShooter : MonoBehaviour
         if (currentAmmo <= 0 && currentReloadableAmmo <= 0)
         {
             Debug.Log("Run out of all ammo! Mission Failed.");
-            if (KillCountManager.Instance != null)
+            if (Map2ResultManager.Instance != null && Map2ResultManager.Instance.isActiveAndEnabled)
             {
-                // 약간의 딜레이(예: 탄피 떨어지는 시간) 후 패널을 띄우고 싶다면 코루틴 사용 권장, 여기서는 즉시 호출
+                Map2ResultManager.Instance.ShowVillageInvadedPanel("모든 탄약을 소모했습니다.");
+            }
+            else if (KillCountManager.Instance != null)
+            {
                 KillCountManager.Instance.ShowMissionFailedPanel();
             }
         }
@@ -409,7 +412,10 @@ public class RaycastShooter : MonoBehaviour
 
         if (currentAmmo <= 0 && currentReloadableAmmo <= 0)
         {
-            if (KillCountManager.Instance != null) KillCountManager.Instance.ShowMissionFailedPanel();
+            if (Map2ResultManager.Instance != null && Map2ResultManager.Instance.isActiveAndEnabled)
+                Map2ResultManager.Instance.ShowVillageInvadedPanel("모든 탄약을 소모했습니다.");
+            else if (KillCountManager.Instance != null)
+                KillCountManager.Instance.ShowMissionFailedPanel();
         }
 
         if (mainCamera == null) return;

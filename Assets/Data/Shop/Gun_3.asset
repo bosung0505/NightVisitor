@@ -19,7 +19,7 @@ MonoBehaviour:
   itemPrice: 0
   itemDescription: Recoil 2 / reloadable ammunition 8 / Body shot damage 3
   gunDamage: 3
-  shootSound: {fileID: 8300000, guid: 982b1896316155b4fbd2cc5cef6d79a6, type: 3}
+  shootSound: {fileID: 8300000, guid: 5f67a95b2e502fe4c970d556404a6e7d, type: 3}
   maxAmmoInClip: 8
   recoilUp: 2
   recoilSide: 1

@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.UI;
 using DG.Tweening;
+using TMPro;
+
 
 public class MenuWindowManager : MonoBehaviour
 {
@@ -17,12 +19,37 @@ public class MenuWindowManager : MonoBehaviour
     [Header("Animation Settings")]
     public float slideDuration = 0.4f; // 슬라이드 걸리는 시간 (초)
 
+    [Header("Global Money Settings")]
+    [Tooltip("초기 자본금을 파싱할 TextMeshProUGUI 오브젝트")]
+    public TextMeshProUGUI startingGoldText;
+
     private int currentIndex = 0; // 현재 열려있는 창의 인덱스 (-1=인벤토리, 0=맵, 1=상점)
+    private static bool isGoldInitialized = false;
 
     void Awake()
     {
         // 모바일 기본값(30fps)을 60fps로 고정하여 UI 애니메이션 끊김 방지
         Application.targetFrameRate = 60;
+
+        // 게임 최초 실행 시에만 텍스트에서 돈을 파싱하여 적용합니다.
+        if (!isGoldInitialized && startingGoldText != null)
+        {
+            // 텍스트 내에 있는 쉼표(,)나 여타 문자를 제거하고 숫자만 추출
+            string textValue = startingGoldText.text;
+            string numberOnly = System.Text.RegularExpressions.Regex.Replace(textValue, @"[^0-9]", "");
+            
+            if (int.TryParse(numberOnly, out int goldValue))
+            {
+                KillCountManager.currentSessionGold = goldValue;
+            }
+            else
+            {
+                Debug.LogWarning("[MenuWindowManager] startingGoldText 에서 숫자를 찾을 수 없어 기본값(0)이 적용됩니다.");
+                KillCountManager.currentSessionGold = 0;
+            }
+            
+            isGoldInitialized = true;
+        }
     }
 
     void Start()

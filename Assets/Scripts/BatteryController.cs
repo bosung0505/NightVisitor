@@ -317,8 +317,12 @@ public class BatteryController : MonoBehaviour
         
         Debug.Log("Time over! Triggering Mission Failed...");
         
-        // KillCountManager의 실패 패널 띄우기 함수 호출
-        if (KillCountManager.Instance != null)
+        // --- 맵 2 대응 분기: 배터리 방전 시 침략 패널 + 부연 설명 호출 ---
+        if (Map2ResultManager.Instance != null && Map2ResultManager.Instance.isActiveAndEnabled)
+        {
+            Map2ResultManager.Instance.ShowVillageInvadedPanel("배터리가 전소되었습니다.");
+        }
+        else if (KillCountManager.Instance != null)
         {
             KillCountManager.Instance.ShowMissionFailedPanel();
         }

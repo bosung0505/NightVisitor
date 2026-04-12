@@ -1507,7 +1507,7 @@ MonoBehaviour:
   headBone: {fileID: 1748469316864323518}
   neckBloodParticlePrefab: {fileID: 4003828172818114288}
   neckBloodDuration: 3
-  aggroRadius: 25
+  aggroRadius: 40
 --- !u!195 &6494392104658839890
 NavMeshAgent:
   m_ObjectHideFlags: 0
