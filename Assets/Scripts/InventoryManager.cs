@@ -24,12 +24,14 @@ public class InventoryManager : MonoBehaviour
     public Image currentGunImage;
     public Image currentScopeImage;
     public Image currentMagImage;
+    public Image currentAggroAmmoImage; // 어그로 탄 현재 장착 슬롯
 
     [Header("Inventory Slots by Category")]
     [Tooltip("에디터에서 각 카테고리별 비어있는(비활성화된) 아이템 버튼들을 순서대로 연결하세요.")]
     public InventoryItemUI[] gunSlots;
     public InventoryItemUI[] scopeSlots;
     public InventoryItemUI[] magSlots;
+    public InventoryItemUI[] aggroAmmoSlots; // 어그로 탄 슬롯
 
     private InventoryItemUI currentSelectedItemUI; // 현재 정보창에 열려있는 아이템
     
@@ -37,6 +39,7 @@ public class InventoryManager : MonoBehaviour
     private InventoryItemUI equippedGunUI;
     private InventoryItemUI equippedScopeUI;
     private InventoryItemUI equippedMagUI;
+    private InventoryItemUI equippedAggroAmmoUI; // 어그로 탄 장착 추적
 
     private void Awake()
     {
@@ -48,6 +51,7 @@ public class InventoryManager : MonoBehaviour
         ClearCurrentStatusSlot(ItemCategory.Gun);
         ClearCurrentStatusSlot(ItemCategory.Scope);
         ClearCurrentStatusSlot(ItemCategory.Mag);
+        ClearCurrentStatusSlot(ItemCategory.AggroAmmo);
     }
 
     /// <summary>
@@ -96,6 +100,16 @@ public class InventoryManager : MonoBehaviour
         return null;
     }
 
+    /// <summary>
+    /// 현재 장착된 어그로 탄의 원본 데이터(ShopItemData)를 반환합니다.
+    /// 어그로 탄이 장착되어 있지 않으면 null을 반환합니다.
+    /// </summary>
+    public ShopItemData GetEquippedAggroAmmoData()
+    {
+        if (equippedAggroAmmoUI != null) return equippedAggroAmmoUI.myItemData;
+        return null;
+    }
+
     private void Start()
     {
         // 시작할 때 정보 창 숨김
@@ -128,9 +142,10 @@ public class InventoryManager : MonoBehaviour
         InventoryItemUI[] targetSlots = null;
         switch (newData.category)
         {
-            case ItemCategory.Gun: targetSlots = gunSlots; break;
-            case ItemCategory.Scope: targetSlots = scopeSlots; break;
-            case ItemCategory.Mag: targetSlots = magSlots; break;
+            case ItemCategory.Gun:       targetSlots = gunSlots;       break;
+            case ItemCategory.Scope:     targetSlots = scopeSlots;     break;
+            case ItemCategory.Mag:       targetSlots = magSlots;       break;
+            case ItemCategory.AggroAmmo: targetSlots = aggroAmmoSlots; break;
         }
 
         if (targetSlots == null || targetSlots.Length == 0)
@@ -250,9 +265,10 @@ public class InventoryManager : MonoBehaviour
         
         switch (category)
         {
-            case ItemCategory.Gun: existingItemUI = equippedGunUI; break;
-            case ItemCategory.Scope: existingItemUI = equippedScopeUI; break;
-            case ItemCategory.Mag: existingItemUI = equippedMagUI; break;
+            case ItemCategory.Gun:       existingItemUI = equippedGunUI;       break;
+            case ItemCategory.Scope:     existingItemUI = equippedScopeUI;     break;
+            case ItemCategory.Mag:       existingItemUI = equippedMagUI;       break;
+            case ItemCategory.AggroAmmo: existingItemUI = equippedAggroAmmoUI; break;
         }
 
         // 뭔가 껴입고 있었다면 벗김
@@ -271,17 +287,24 @@ public class InventoryManager : MonoBehaviour
         // 카테고리별로 타겟 이미지 컴포넌트와 기록 변수 연결
         switch (data.category)
         {
-            case ItemCategory.Gun: 
-                equippedGunUI = targetUI; 
-                targetSlotImage = currentGunImage; 
+            case ItemCategory.Gun:
+                equippedGunUI   = targetUI;
+                targetSlotImage = currentGunImage;
                 break;
-            case ItemCategory.Scope: 
-                equippedScopeUI = targetUI; 
-                targetSlotImage = currentScopeImage; 
+            case ItemCategory.Scope:
+                equippedScopeUI = targetUI;
+                targetSlotImage = currentScopeImage;
                 break;
-            case ItemCategory.Mag: 
-                equippedMagUI = targetUI; 
-                targetSlotImage = currentMagImage; 
+            case ItemCategory.Mag:
+                equippedMagUI   = targetUI;
+                targetSlotImage = currentMagImage;
+                break;
+            case ItemCategory.AggroAmmo:
+                equippedAggroAmmoUI = targetUI;
+                targetSlotImage     = currentAggroAmmoImage;
+                // 어그로 탄 장착 시 InGameUIBinder의 어그로 버튼 갱신
+                if (InGameUIBinder.Instance != null)
+                    InGameUIBinder.Instance.RefreshAggroButton();
                 break;
         }
 
@@ -304,17 +327,24 @@ public class InventoryManager : MonoBehaviour
 
         switch (category)
         {
-            case ItemCategory.Gun: 
-                equippedGunUI = null; 
-                targetSlotImage = currentGunImage; 
+            case ItemCategory.Gun:
+                equippedGunUI   = null;
+                targetSlotImage = currentGunImage;
                 break;
-            case ItemCategory.Scope: 
-                equippedScopeUI = null; 
-                targetSlotImage = currentScopeImage; 
+            case ItemCategory.Scope:
+                equippedScopeUI = null;
+                targetSlotImage = currentScopeImage;
                 break;
-            case ItemCategory.Mag: 
-                equippedMagUI = null; 
-                targetSlotImage = currentMagImage; 
+            case ItemCategory.Mag:
+                equippedMagUI   = null;
+                targetSlotImage = currentMagImage;
+                break;
+            case ItemCategory.AggroAmmo:
+                equippedAggroAmmoUI = null;
+                targetSlotImage     = currentAggroAmmoImage;
+                // 어그로 탄 해제 시 InGameUIBinder의 버튼 숨김
+                if (InGameUIBinder.Instance != null)
+                    InGameUIBinder.Instance.RefreshAggroButton();
                 break;
         }
 

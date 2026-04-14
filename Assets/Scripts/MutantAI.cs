@@ -13,10 +13,11 @@ public class MutantAI : MonoBehaviour
     private int maxHitPoints = 3;
     private bool isDead = false;
     private bool isReacting = false;
+    private bool isAggroLureImmune = false; // 어그로탄에 끽린 동안 다른 모든 어그로에 면역
 
     private Transform targetCamera;
     
-    public enum MutantPhase { ToEntrance, ToInvasion, ChasePlayer, Crawling }
+    public enum MutantPhase { ToEntrance, ToInvasion, ChasePlayer, Crawling, AggroLured }
     private MutantPhase currentPhase = MutantPhase.ToEntrance;
 
     [Header("Decoy Settings")]
@@ -114,6 +115,10 @@ public class MutantAI : MonoBehaviour
     [Header("Animation Settings (Triggers/Bools)")]
     public string animWalkBool = "IsWalking";
     public string animRunTrigger = "run";
+    [Tooltip("피격 시 재생할 리액션 애니메이션 트리거 이름 (예: React_attack). 비워두면 스킵됩니다.")]
+    public string animReactTrigger = "React_attack";
+    [Tooltip("React_attack 애니메이션의 재생 시간(초). 이 시간이 지난 뒤 LookAround 또는 Scream으로 넘어갑니다.")]
+    public float reactAnimDuration = 1.0f;
     public string animLookAroundTrigger = "LookAround";
     public string animScreamTrigger = "Scream";
     public string animJumpAttackTrigger = "jump_attack";
@@ -228,6 +233,8 @@ public class MutantAI : MonoBehaviour
     {
         // 죽었거나, 리액션 중이거나, 요원이 없으면 이동 로직 전체 무시
         if (isDead || isReacting || agent == null) return;
+        // 어그로탄에 끽린 상태에서는 AggroLuredRoutine이 전담 담당 — Update 이동로직 전체 건너뜀
+        if (currentPhase == MutantPhase.AggroLured) return;
 
         // 피격 혹은 어그로가 끌려 플레이어를 추적하는 상태가 아닐 때만 원래 목적지 판정 수행
         if (currentPhase == MutantPhase.ToEntrance || currentPhase == MutantPhase.ToInvasion)
@@ -414,6 +421,13 @@ public class MutantAI : MonoBehaviour
             return;
         }
 
+        // 어그로탄 면역 상태: 데미지는 적용되지만 어떤 리액션이나 실체 변격도 없음
+        if (isAggroLureImmune)
+        {
+            Debug.Log("[MutantAI] 어그로르 면역 상태 — 데미지만 적용, 리액션 없음");
+            return;
+        }
+
         bool wasNotChasing = (currentPhase != MutantPhase.ChasePlayer);
         bool isRunner = (startAsRunner || isChaseRunning || (agent != null && agent.speed >= runSpeed));
 
@@ -458,7 +472,7 @@ public class MutantAI : MonoBehaviour
             agent.updateRotation = false; // 제자리 리액션 도중 몸이 꼬이지 않도록 엔진 회전 잠금
         }
 
-        // 가장 먼저, 카메라(플레이어)를 쳐다보고 동작을 수행합니다. (요청사항 반영)
+        // 가장 먼저, 카메라(플레이어)를 쳐다보고 동작을 수행합니다.
         if (targetCamera != null)
         {
             Vector3 direction = (targetCamera.position - transform.position).normalized;
@@ -469,12 +483,35 @@ public class MutantAI : MonoBehaviour
             }
         }
 
-        // 타격 횟수에 따른 철저한 분기
+        // ★ [1단계] React_attack 애니메이션 먼저 재생 (인스펙터에 이름이 설정된 경우)
+        if (!string.IsNullOrEmpty(animReactTrigger))
+        {
+            animator.SetTrigger(animReactTrigger);
+            // 게임이 끝나면 즉시 중단
+            float elapsed = 0f;
+            while (elapsed < reactAnimDuration)
+            {
+                if (KillCountManager.isGameEnding) { isReacting = false; currentReactionCoroutine = null; yield break; }
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+        }
+
+        // 게임 종료 여부 재확인
+        if (KillCountManager.isGameEnding) { isReacting = false; currentReactionCoroutine = null; yield break; }
+
+        // ★ [2단계] 타격 횟수에 따른 LookAround 또는 Scream 분기
         if (currentHitCount == 1)
         {
             // 1대 맞음: 두리번 거리는 애니메이션 재생 및 설정된 시간만큼 대기
             animator.SetTrigger(animLookAroundTrigger);
-            yield return new WaitForSeconds(lookAroundDuration);
+            float elapsed = 0f;
+            while (elapsed < lookAroundDuration)
+            {
+                if (KillCountManager.isGameEnding) { isReacting = false; currentReactionCoroutine = null; yield break; }
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
         }
         else if (currentHitCount == 2)
         {
@@ -483,7 +520,6 @@ public class MutantAI : MonoBehaviour
             {
                 animator.SetTrigger(animScreamTrigger);
                 
-                // 디버깅: 왜 소리가 안 나는지 추적하는 탐지기 코드
                 if (audioSource == null) 
                 {
                     Debug.LogWarning("🚨 [MutantAI] AudioSource 컴포넌트를 찾지 못했습니다! (프리팹 원본에 안 달려있을 확률 99%)");
@@ -501,12 +537,18 @@ public class MutantAI : MonoBehaviour
                 // 2대 맞아서 비명을 지를 때 주변 돌연변이들에게 어그로 신호를 뿌립니다!
                 BroadcastAggro();
 
-                yield return new WaitForSeconds(screamDuration);
+                float elapsed = 0f;
+                while (elapsed < screamDuration)
+                {
+                    if (KillCountManager.isGameEnding) { isReacting = false; currentReactionCoroutine = null; yield break; }
+                    elapsed += Time.deltaTime;
+                    yield return null;
+                }
             }
         }
 
-        // 지연 시간이 끝났을 때(죽지 않았다면) 다음 액션을 수행
-        if (!isDead)
+        // 지연 시간이 끝났을 때(죽지 않았다면, 게임도 안 끝났다면) 다음 액션을 수행
+        if (!isDead && !KillCountManager.isGameEnding)
         {
             if(agent != null) 
             {
@@ -560,9 +602,15 @@ public class MutantAI : MonoBehaviour
 
         BroadcastAggro();
 
-        yield return new WaitForSeconds(screamDuration);
+        float elapsed = 0f;
+        while (elapsed < screamDuration)
+        {
+            if (KillCountManager.isGameEnding) { isReacting = false; currentReactionCoroutine = null; yield break; }
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
 
-        if (!isDead)
+        if (!isDead && !KillCountManager.isGameEnding)
         {
             if(agent != null) 
             {
@@ -729,7 +777,17 @@ public class MutantAI : MonoBehaviour
     private IEnumerator ReviveRoutine(bool isHeadshot)
     {
         // 1. 유저가 플레이어가 안심하길 기다리며 쓰러진 채 대기 (낚시)
-        yield return new WaitForSeconds(reviveDelay);
+        float elapsed = 0f;
+        while (elapsed < reviveDelay)
+        {
+            // 게임이 끝나면 부활 자체를 취소합니다 (패널이 뜬 후에도 기어가는 버그 방지)
+            if (KillCountManager.isGameEnding) yield break;
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        // 게임이 끝난 직후 부활 타이밍이 겹쳐도 방어
+        if (KillCountManager.isGameEnding) yield break;
         
         // 2. 가짜 시체 상태 해제 및 다시 기어오기 상태 돌입!
         isDead = false;
@@ -851,9 +909,15 @@ public class MutantAI : MonoBehaviour
         }
 
         // 1. 유저 요청: 1초 동안 어리둥절하게 그 자리에서 소름돋는 정적(얼음)
-        yield return new WaitForSeconds(1.0f);
+        float elapsed = 0f;
+        while (elapsed < 1.0f)
+        {
+            if (KillCountManager.isGameEnding) { isReacting = false; yield break; }
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
 
-        if (isDead) { isReacting = false; yield break; }
+        if (isDead || KillCountManager.isGameEnding) { isReacting = false; yield break; }
 
         // 2. 시간이 지나면 플레이어(카메라)를 홱 쳐다봄
         if (targetCamera == null)
@@ -881,9 +945,15 @@ public class MutantAI : MonoBehaviour
         }
 
         // 포효 사운드 클립/애니메이션 길이만큼 대기
-        yield return new WaitForSeconds(screamDuration);
+        float screamElapsed = 0f;
+        while (screamElapsed < screamDuration)
+        {
+            if (KillCountManager.isGameEnding) { isReacting = false; yield break; }
+            screamElapsed += Time.deltaTime;
+            yield return null;
+        }
 
-        if (isDead) { isReacting = false; yield break; }
+        if (isDead || KillCountManager.isGameEnding) { isReacting = false; yield break; }
 
         // 4. 모션이 끝나고 살아있다면 즉시 미친 듯이 돌진!
         if (!isDead)
@@ -918,4 +988,203 @@ public class MutantAI : MonoBehaviour
         Gizmos.color = new Color(1.0f, 0.0f, 0.0f, 0.5f); // 강렬한 반투명 빨간색
         Gizmos.DrawWireSphere(transform.position, aggroRadius);
     }
+
+    // =========================================================================
+    // --- 어그로탄 대응 메서드 ---
+    // =========================================================================
+
+    private Coroutine aggroLuredCoroutine;
+
+    /// <summary>
+    /// AggroBulletMarker가 폭발 시 반경 내 뮤턴트에게 호출합니다.
+    /// 부적격(Crawling, 점프 중, 이미 어그로 면역)이면 false를 반환합니다.
+    /// </summary>
+    public bool OnAggroLured(Vector3 lurePosition, float circleR, float walkSpd)
+    {
+        // 기어오는 뮤턴트는 어그로 무시 — 카메라를 향해 계속 전진
+        if (currentPhase == MutantPhase.Crawling) return false;
+        // 점프 공격 중(이미 게임오버 연출 중)은 무시
+        if (hasTriggeredAttack) return false;
+        // 이미 어그로탄에 끌린 상태라면 중복 무시
+        if (isAggroLureImmune) return false;
+        // 죽어있거나 진짜 사망이면 무시
+        if (isDead || isTrueDead) return false;
+
+        // 기존 진행 중인 코루틴 전부 정리
+        if (phase1Coroutine != null)       { StopCoroutine(phase1Coroutine); phase1Coroutine = null; }
+        if (currentReactionCoroutine != null) { StopCoroutine(currentReactionCoroutine); currentReactionCoroutine = null; }
+        if (aggroLuredCoroutine != null)   { StopCoroutine(aggroLuredCoroutine); aggroLuredCoroutine = null; }
+
+        // 면역 플래그 ON — 이 5초 동안 다른 어그로(총격, 스크림 등)를 무시
+        isAggroLureImmune = true;
+        isReacting        = false;
+        currentPhase      = MutantPhase.AggroLured;
+
+        // 이동 중단 (관성 제거)
+        if (agent != null)
+        {
+            agent.isStopped     = false; // 목적지를 새로 받을 것이므로 먼저 풀고
+            agent.velocity      = Vector3.zero;
+            agent.updateRotation = true;
+        }
+
+        aggroLuredCoroutine = StartCoroutine(AggroLuredRoutine(lurePosition, circleR, walkSpd));
+        Debug.Log($"[MutantAI] {name} → 어그로 끌림! 위치: {lurePosition}");
+        return true;
+    }
+
+    /// <summary>
+    /// AggroBulletMarker가 5초 후 만료될 때 호출합니다.
+    /// 체력만 유지한 채 ToEntrance 상태로 초기화합니다.
+    /// </summary>
+    public void OnAggroExpired()
+    {
+        if (currentPhase != MutantPhase.AggroLured) return;
+
+        // 코루틴 정리
+        if (aggroLuredCoroutine != null)
+        {
+            StopCoroutine(aggroLuredCoroutine);
+            aggroLuredCoroutine = null;
+        }
+
+        // 면역 해제
+        isAggroLureImmune = false;
+        isReacting        = false;
+
+        // 체력만 유지, Phase는 처음 생성된 것처럼 ToEntrance로 초기화
+        currentPhase    = MutantPhase.ToEntrance;
+        isChaseRunning  = false;
+        isFullyAlerted  = false;
+
+        // 이동 정상화
+        if (agent != null)
+        {
+            agent.isStopped     = false;
+            agent.speed         = walkSpeed;
+            agent.updateRotation = true;
+            agent.velocity      = Vector3.zero;
+        }
+
+        animator.SetBool(animWalkBool, false);
+
+        // ToEntrance 루프 재시작
+        if (villageEntrance != null)
+        {
+            phase1Coroutine = StartCoroutine(IdleWalkRoutine());
+        }
+
+        Debug.Log($"[MutantAI] {name} → 어그로 만료. ToEntrance 재시작.");
+    }
+
+    /// <summary>
+    /// 어그로탄에 끌린 뮤턴트의 행동 루틴:
+    ///   1. LurePosition 방향으로 걸어 접근
+    ///   2. circleRadius 이내 도달 시 원형 순찰 (Idle/LookAround 랜덤 연출)
+    ///   AggroBulletMarker가 OnAggroExpired()를 호출하면 정리됨.
+    /// </summary>
+    private IEnumerator AggroLuredRoutine(Vector3 lurePos, float circleR, float walkSpd)
+    {
+        // 걷기 속도로 접근
+        if (agent != null)
+        {
+            agent.speed = walkSpd;
+            agent.isStopped = false;
+        }
+        animator.SetBool(animWalkBool, true);
+
+        // ── [1단계] 착탄 지점으로 접근 ───────────────────────────────────────
+        while (currentPhase == MutantPhase.AggroLured)
+        {
+            if (KillCountManager.isGameEnding) yield break;
+            if (agent == null) yield break;
+
+            agent.SetDestination(lurePos);
+
+            // xz 평면 거리 측정 (높이 무시)
+            float dist = Vector2.Distance(
+                new Vector2(transform.position.x, transform.position.z),
+                new Vector2(lurePos.x, lurePos.z));
+
+            if (dist <= circleR) break; // 목표 반경 도달
+
+            yield return null;
+        }
+
+        if (currentPhase != MutantPhase.AggroLured) yield break;
+
+        // 도착: 이동 정지
+        if (agent != null) agent.isStopped = true;
+        animator.SetBool(animWalkBool, false);
+
+        // ── [2단계] 원형 순찰 루프 ────────────────────────────────────────────
+        float angle = Random.Range(0f, 360f); // 시작 각도 랜덤
+
+        while (currentPhase == MutantPhase.AggroLured)
+        {
+            if (KillCountManager.isGameEnding) yield break;
+
+            // 다음 순찰 웨이포인트 계산 (30~90도씩 전진)
+            angle += Random.Range(30f, 90f);
+            float rad = angle * Mathf.Deg2Rad;
+            Vector3 nextWP = lurePos + new Vector3(Mathf.Sin(rad) * circleR, 0f, Mathf.Cos(rad) * circleR);
+
+            // 웨이포인트로 이동
+            if (agent != null)
+            {
+                agent.isStopped = false;
+                agent.speed = walkSpd * 0.8f; // 순찰은 살짝 느리게
+                agent.SetDestination(nextWP);
+            }
+            animator.SetBool(animWalkBool, true);
+
+            // 웨이포인트 도달 대기
+            while (currentPhase == MutantPhase.AggroLured)
+            {
+                if (KillCountManager.isGameEnding) yield break;
+                if (agent == null) break;
+                float wpDist = Vector2.Distance(
+                    new Vector2(transform.position.x, transform.position.z),
+                    new Vector2(nextWP.x, nextWP.z));
+                if (wpDist < 0.8f) break;
+                yield return null;
+            }
+
+            if (currentPhase != MutantPhase.AggroLured) yield break;
+
+            // 웨이포인트 도달 후 잠시 정지
+            if (agent != null) agent.isStopped = true;
+            animator.SetBool(animWalkBool, false);
+
+            // 랜덤 연출 선택 (30% Idle 대기 / 70% LookAround)
+            float roll = Random.value;
+            if (roll < 0.3f)
+            {
+                // Idle — 1~2초 그냥 서있기
+                float idleTime = Random.Range(1f, 2f);
+                float elapsed  = 0f;
+                while (elapsed < idleTime && currentPhase == MutantPhase.AggroLured)
+                {
+                    if (KillCountManager.isGameEnding) yield break;
+                    elapsed += Time.deltaTime;
+                    yield return null;
+                }
+            }
+            else
+            {
+                // LookAround 트리거
+                if (!string.IsNullOrEmpty(animLookAroundTrigger))
+                    animator.SetTrigger(animLookAroundTrigger);
+
+                float elapsed = 0f;
+                while (elapsed < lookAroundDuration && currentPhase == MutantPhase.AggroLured)
+                {
+                    if (KillCountManager.isGameEnding) yield break;
+                    elapsed += Time.deltaTime;
+                    yield return null;
+                }
+            }
+        }
+    }
 }
+

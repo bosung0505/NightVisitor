@@ -7,6 +7,8 @@ using TMPro;
 /// </summary>
 public class InGameUIBinder : MonoBehaviour
 {
+    /// <summary>InventoryManager 등 외부에서 RefreshAggroButton()을 호출하기 위한 싱글톤.</summary>
+    public static InGameUIBinder Instance;
     [Header("CameraController UI")]
     public RectTransform cancelZoneUI;
     public Image crosshairImage;
@@ -18,10 +20,21 @@ public class InGameUIBinder : MonoBehaviour
     public TextMeshProUGUI reloadableAmmoText;
     public Button reloadButton;
 
+    [Header("Aggro Bullet UI (Map 2 Only)")]
+    [Tooltip("어그로 탄 발사 버튼. Map2 패널에만 달고 부모 게임오브젝트 비활성화로 두세요.")]
+    public Button aggroBulletButton;
+    [Tooltip("체크 시 이 UIBinder가 Map2 패널임을 나타냅니다. Map1 UIBinder는 체크 해제.")]
+    public bool isMap2UIPanel = false;
+
     [Header("Battery UI")]
     public GameObject[] batteryCounts; // UI Hierarchy에서 가져옴 (Count3, Count2)
     public GameObject lastBatteryCount; // Count1
     public GameObject batteryCase;
+
+    private void Awake()
+    {
+        Instance = this;
+    }
 
     private void OnEnable()
     {
@@ -81,6 +94,37 @@ public class InGameUIBinder : MonoBehaviour
                 if (batteryCase != null)
                     BatteryController.Instance.batteryCase = batteryCase;
             }
+
+            // 4. 어그로 버튼 초기 상태 갱신
+            RefreshAggroButton();
+        }
+    }
+
+    /// <summary>
+    /// 어그로 버튼의 활성/비활성을 현재 장착 상태와 맵 판별에 따라 갱신합니다.
+    /// - Map2 UIBinder + AggroAmmo 장착 → 버튼 활성화
+    /// - Map1 UIBinder OR 미장착 → 버튼 비활성화
+    /// 버튼은 소모품이므로 RaycastShooter.FireAggroBullet() 호출 후 스스로 비활성화됩니다.
+    /// </summary>
+    public void RefreshAggroButton()
+    {
+        if (aggroBulletButton == null) return;
+
+        bool hasAmmo   = (InventoryManager.Instance != null &&
+                          InventoryManager.Instance.GetEquippedAggroAmmoData() != null);
+        bool shouldShow = isMap2UIPanel && hasAmmo;
+
+        aggroBulletButton.gameObject.SetActive(shouldShow);
+
+        if (shouldShow)
+        {
+            // 기존 리스너 누적 방지 후 연결
+            aggroBulletButton.onClick.RemoveAllListeners();
+            aggroBulletButton.onClick.AddListener(() =>
+            {
+                if (RaycastShooter.Instance != null)
+                    RaycastShooter.Instance.SetNextShotAsAggro();
+            });
         }
     }
 }

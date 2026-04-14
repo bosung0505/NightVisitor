@@ -504,3 +504,115 @@ public struct MutantSpawnGroup
 ---
 **[다음에 AI를 부르실 때 사용할 프롬프트 예시]**
 `Assets 폴더 최상단에 있는 NightVisitor_ProjectGuide.md 문서를 먼저 읽고 현재 프로젝트 진행 상황과 코드 구조를 파악해 줘!`
+
+---
+
+## 31. 관통탄(Penetration) 시스템 및 블러드 파티클 버그 수정 (2026.04.15 추가)
+
+### ShopItemData — Gun 카테고리 확장
+- `hasPenetration` (bool): 총기 데이터에 관통탄 여부 토글 추가. `ShopItemDataEditor`의 Gun Settings 섹션 하단 **Special Abilities** 그룹에서 체크박스로 표시.
+- `maxAmmoInClip` 제거: 탄창 크기 관리가 `MagazineUpgradeData`로 완전히 이관되었으므로 해당 필드 삭제. (이전 섹션 27 참고)
+
+### RaycastShooter.cs — 관통 발사 로직
+
+- **`isNextShotPenetration` 플래그**: 장착된 총기의 `hasPenetration`이 true이면 `Shoot()` / `ShootAt()` 진입 시 `FirePenetrationRay(ray)` 분기, 아니면 기존 `FireSingleRay(ray)` 유지.
+- **`FirePenetrationRay(Ray ray)`**: `Physics.RaycastAll()`을 사용해 레이 경로 상의 **모든 충돌체를 한 번에 수집** → 거리순 정렬 후 순서대로 처리.
+  - **적 콜라이더(MutantAI / MonsterAI / Hitbox) 히트:** `Hitbox.TakeDamage` 또는 직접 `TakeDamage` 호출 + `Emit()` 방식으로 블러드 파티클 발사 (동시 다중 파티클 허용).
+  - **비적 콜라이더 히트:** 해당 지점에서 관통 즉시 중단 + 환경 히트 이펙트 재생.
+- **파티클 버그 수정:** 기존 `Play()` 방식은 매 히트마다 파티클을 재시작하여 이전 파편이 사라지는 문제가 있었음. 관통 시 각 히트 지점마다 `Emit(count)` 방식으로 개별 방출하여 여러 파편이 동시에 화면에 유지되도록 수정.
+
+---
+
+## 32. 어그로 탄(Aggro Bullet) 시스템 구현 (2026.04.15 추가)
+
+### 기획 개요
+Map 2 전용 **소모품 특수탄**. 한 번 사용하면 복구 불가. 총에서 발사하면 착탄 지점에서 폭발+연막 연출이 재생되며 반경 내 뮤턴트들이 해당 위치로 끌려와 5초간 배회하다가 기억이 초기화된 채 원래 행동으로 복귀.
+
+### ShopItemData — AggroAmmo 카테고리 신설
+
+```
+ItemCategory: Gun | Scope | Mag | AggroAmmo  ← 신규
+```
+
+| 필드 | 설명 |
+|---|---|
+| `effectDelay` | 착탄 후 폭발까지 대기 시간 (기본 0.5초) |
+| `smokeDelay` | 폭발 후 연막 시작까지 추가 대기 시간 (기본 1.5초) |
+| `effectDuration` | 연막 지속 시간 (기본 5초) |
+| `smokeFadeOutDuration` | 연막 서서히 사라지는 시간 (기본 1.5초) |
+| `aggroRadius` | 어그로가 끌리는 반경 (m) |
+| `circleRadius` | 도달 후 순찰 반경 (m) |
+| `luredWalkSpeed` | 접근 속도 (m/s) |
+| `explosionSFX` / `explosionVolume` | 폭발 사운드 & 볼륨 (0~1) |
+| `explosionParticlePrefab` / `explosionScale` | 폭발 파티클 프리팹 & 크기 배율 |
+| `smokeSFX` / `smokeVolume` | 연막 루프 사운드 & 볼륨 (0~1) |
+| `smokeParticlePrefab` / `smokeScale` | 연막 파티클 프리팹 & 크기 배율 |
+
+> **⚠️ 파티클 스케일 주의:** Unity 파티클의 Scaling Mode 기본값이 `Local`이면 `transform.localScale`을 바꿔도 크기가 변하지 않음. `AggroBulletMarker`에서 인스턴스화 직후 모든 ParticleSystem 컴포넌트를 순회하여 **`scalingMode = ParticleSystemScalingMode.Hierarchy`로 강제 변경**함으로써 배율이 정확하게 반영되도록 처리함.
+
+### AggroBulletMarker.cs (신규)
+
+착탄 지점에 생성되어 전체 생명주기를 관리하는 마커 컴포넌트.
+
+**타임라인:**
+```
+[착탄]
+  ↓ effectDelay 대기 (0.5초)
+💥 폭발 파티클 + 폭발 SFX — 1회 재생
+  ↓ smokeDelay 추가 대기 (1.5초)
+💨 연막 파티클 + 연막 SFX 루프 시작
+   + 반경 내 뮤턴트에게 OnAggroLured() 브로드캐스트
+  ↓ effectDuration 대기 (5초)
+🌫️ 연막 파티클 Stop(StopEmitting) + SFX 볼륨 서서히 0 (smokeFadeOutDuration)
+   + 모든 끌린 뮤턴트에게 OnAggroExpired() 브로드캐스트
+[마커 GameObject 소멸]
+```
+
+- AudioSource 2개를 `AddComponent<AudioSource>()`로 **코드로 자동 생성** (프리팹에 달아둘 필요 없음).
+- 연막 SFX 페이드아웃: 파티클은 `StopEmitting`(기존 입자 수명대로 자연소멸), 사운드는 `Lerp` 볼륨 감소 → 뚝 끊기지 않게 처리.
+
+### MutantAI.cs — AggroLured 페이즈 추가
+
+```csharp
+public enum MutantPhase { ToEntrance, ToInvasion, ChasePlayer, Crawling, AggroLured }
+```
+
+| 메서드 | 역할 |
+|---|---|
+| `OnAggroLured(lurePos, circleR, walkSpd)` | 마커에서 호출. 부적격(Crawling, 점프 중, 이미 면역)이면 false 반환. 적격이면 `AggroLuredRoutine()` 시작 후 true 반환. |
+| `OnAggroExpired()` | 마커 만료 시 호출. 체력만 유지하고 `ToEntrance`로 상태 초기화 + `IdleWalkRoutine()` 재시작. |
+| `AggroLuredRoutine()` | lurePos까지 접근 → circleR 이내 도달 시 원형 순찰 (30~90도 웨이포인트 이동 + 랜덤 Idle/LookAround 연출) |
+
+**면역(Immune) 시스템:**
+- `isAggroLureImmune = true` 상태인 5초 동안 다른 어그로(총격, 연쇄 어그로)에 어떤 리액션도 발생하지 않음. 데미지는 축적됨.
+- `Update()` 이동 로직 전체가 `AggroLured` 페이즈에서 스킵되어 마커 루틴이 전담.
+- **부활(Crawling) 및 점프공격 중인 뮤턴트는 어그로탄 대상에서 완전 제외.**
+
+### InventoryManager.cs 수정
+
+- `aggroAmmoSlots[]` 배열, `equippedAggroAmmoUI`, `currentAggroAmmoImage` 추가.
+- `GetEquippedAggroAmmoData()`: 현재 장착된 AggroAmmo ShopItemData 반환.
+- 장착/해제 시 `InGameUIBinder.Instance.RefreshAggroButton()` 자동 호출.
+
+### InGameUIBinder.cs 수정
+
+- `static Instance` 추가 (InventoryManager에서 직접 참조용).
+- `aggroBulletButton` (Button): 어그로 탄 발사 버튼. Inspector에서 연결.
+- `isMap2UIPanel` (bool): Map2 패널에만 체크. Map1 UIBinder는 체크 해제.
+- `RefreshAggroButton()`: **Map2 UIBinder + AggroAmmo 장착 시에만 버튼 활성화**. OnEnable 시 및 인벤토리 변경 시 자동 호출.
+
+### RaycastShooter.cs 수정
+
+- `SetNextShotAsAggro()`: 인게임 버튼 OnClick 연결. 다음 발사를 어그로탄으로 예약 + 버튼 영구 비활성화 (소모품 1회).
+- `FireAggroBullet(Ray)`: 레이캐스트 착탄 지점에 `AggroBulletMarker` GameObject를 코드로 생성하고 `Init(aggroData)` 주입. 일반 탄약 소모 없음.
+
+### Unity 에디터 세팅 체크리스트
+
+1. **ShopItemData 에셋 생성** → Category: `AggroAmmo` → 각 필드 연결
+2. **InventoryManager** → `Aggro Ammo Slots[]` 배열에 인벤토리 슬롯 UI 연결, `Current Aggro Ammo Image` 연결
+3. **Map2 InGame 패널**에 어그로 탄 발사 버튼 추가 (기본 비활성화) → `InGameUIBinder.aggroBulletButton`에 연결
+4. **Map2 InGameUIBinder** → `Is Map2 UI Panel` ✅ 체크 (Map1 UIBinder는 체크 해제)
+
+---
+**[다음에 AI를 부르실 때 사용할 프롬프트 예시]**
+`Assets 폴더 최상단에 있는 NightVisitor_ProjectGuide.md 문서를 먼저 읽고 현재 프로젝트 진행 상황과 코드 구조를 파악해 줘!`

@@ -18,11 +18,12 @@ MonoBehaviour:
   iconSize: {x: 90, y: 60}
   itemPrice: 0
   itemDescription: Recoil 3 / reloadable ammunition 8 / Body shot damage 1
-  gunDamage: 1
+  gunDamage: 2
   shootSound: {fileID: 8300000, guid: e11a5a019377fbd4c81caa0adcb4c236, type: 3}
   maxAmmoInClip: 8
   recoilUp: 3
   recoilSide: 1.5
+  hasPenetration: 1
   zoomMultiplier: 1
   fogStartDistance: 0
   fogEndDistance: 0

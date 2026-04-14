@@ -13,17 +13,32 @@ MonoBehaviour:
   m_Name: Mag_1
   m_EditorClassIdentifier: 
   itemName: High-cap mag
-  category: 2
+  category: 3
   itemIcon: {fileID: 21300000, guid: 42522206d1bcb68469d8667a8ed2a8ac, type: 3}
   iconSize: {x: 50, y: 150}
-  itemPrice: 9999
+  itemPrice: 0
   itemDescription: reloadable ammunition +5
   gunDamage: 1
   shootSound: {fileID: 0}
-  maxAmmoInClip: 8
   recoilUp: 2
   recoilSide: 1
+  hasPenetration: 0
   zoomMultiplier: 1
   fogStartDistance: 0
   fogEndDistance: 0
   batteryEfficiencyMultiplier: 1
+  effectDelay: 0.5
+  smokeDelay: 1.5
+  effectDuration: 7
+  smokeFadeOutDuration: 1.5
+  aggroRadius: 30
+  circleRadius: 5
+  luredWalkSpeed: 5
+  explosionSFX: {fileID: 8300000, guid: 02417120ddc150240880adc86408a292, type: 3}
+  explosionVolume: 1
+  explosionParticlePrefab: {fileID: 180128, guid: 6586ff0f14125534cae2f5d8f04b7871, type: 3}
+  explosionScale: 3
+  smokeSFX: {fileID: 8300000, guid: 6850a3a229839274abdb41294352fb5e, type: 3}
+  smokeVolume: 1
+  smokeParticlePrefab: {fileID: 100000, guid: 5b6c2f68addb63847b151f0d41a9d3b1, type: 3}
+  smokeScale: 3

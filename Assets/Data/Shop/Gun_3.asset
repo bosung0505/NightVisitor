@@ -23,6 +23,7 @@ MonoBehaviour:
   maxAmmoInClip: 8
   recoilUp: 2
   recoilSide: 1
+  hasPenetration: 0
   zoomMultiplier: 1
   fogStartDistance: 0
   fogEndDistance: 0

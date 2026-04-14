@@ -27,6 +27,8 @@ public class RaycastShooter : MonoBehaviour
     private int currentReloadableAmmo;
     private bool isReloading = false;
     private int currentGunDamage = 1; // 장착된 총기 데미지
+    private bool currentPenetration = false; // 장착된 총기의 관통탄 여부
+    private bool isNextShotAggro = false;    // 다음 발사가 어그로탄인지 여부 (소모품, 1회)
 
     [Header("Audio Settings")]
     [Tooltip("격발 사운드")]
@@ -47,6 +49,8 @@ public class RaycastShooter : MonoBehaviour
 
     [Header("Impact Settings")]
     public float fleeRadius = 5f;
+    [Tooltip("관통탄이 각 뮤턴트에 적중했을 때 방출하는 혈흔 파티클 수. (비관통탄은 ParticleSystem.Play()를 사용하므로 이 값을 사용하지 않습니다.)")]
+    public int penetrationBloodEmitCount = 12;
 
     [Header("Recoil Settings (Realistic)")]
     [Tooltip("총을 쏠 때 시점이 위로 올라가는 기본 반동 세기")]
@@ -172,13 +176,14 @@ public class RaycastShooter : MonoBehaviour
     {
         if (gunData != null && gunData.category == ItemCategory.Gun)
         {
-            currentGunDamage = gunData.gunDamage;
+            currentGunDamage    = gunData.gunDamage;
+            currentPenetration  = gunData.hasPenetration;
             // ★ maxAmmoPerMag는 이제 MagazineUpgradeData에서 설정하므로 여기서 덮어쓰지 않습니다.
             shootSound = gunData.shootSound;
             recoilUp   = gunData.recoilUp;
             recoilSide = gunData.recoilSide;
 
-            Debug.Log($"[총기 데이터 갱신] 데미지:{currentGunDamage}, 반동:{recoilUp}");
+            Debug.Log($"[총기 데이터 갱신] 데미지:{currentGunDamage}, 반동:{recoilUp}, 관통:{currentPenetration}");
         }
     }
 
@@ -248,147 +253,26 @@ public class RaycastShooter : MonoBehaviour
 
         // Raycast from the center of the screen (0.5, 0.5 viewport)
         Ray ray = mainCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
-        RaycastHit hit;
 
-        // Perform raycast
-        if (Physics.Raycast(ray, out hit))
+        // ─── 어그로탄 분기 ────────────────────────────────────────────────
+        if (isNextShotAggro)
         {
-            // Debug line for visual confirmation in Scene view
-            Debug.DrawLine(ray.origin, hit.point, Color.red, 2f);
-
-            // 동적으로 맵이 생성되거나 파티클이 끊어졌을 때를 대비해 실시간으로 다시 찾기
-            if (bloodSplatter == null)
-            {
-                GameObject splatterObj = GameObject.Find("FX_BloodSplatter");
-                if (splatterObj != null)
-                {
-                    bloodSplatter = splatterObj.GetComponent<ParticleSystem>();
-                }
-            }
-
-            // play blood splatter effect
-            if (bloodSplatter != null)
-            {
-                bloodSplatter.transform.position = hit.point;
-                bloodSplatter.transform.rotation = Quaternion.LookRotation(hit.normal);
-                bloodSplatter.Play();
-            }
-
-            // === [신규 로직] 부위별 타격 판정 (히트박스) ===
-            Hitbox hitbox = hit.collider.GetComponent<Hitbox>();
-            if (hitbox == null) hitbox = hit.collider.GetComponentInParent<Hitbox>(); // 부모나 조상 탐색
-
-            if (hitbox != null)
-            {
-                // 히트박스가 부착된 경우 (예: 세팅된 여우) -> 총기 고유의 바디샷 데미지(부위별 증폭됨)를 전달
-                hitbox.TakeDamage(currentGunDamage, hit.point);
-                Debug.Log($"Hit Hitbox on {hit.collider.name} with Damage: {currentGunDamage}");
-            }
-            else
-            {
-                // === [기존 로직] 히트박스가 없는 경우 (예: 기존 닭 시스템 유지, 세팅 안된 적) ===
-                Animator animator = hit.collider.GetComponent<Animator>();
-
-                // If not on the object itself, try finding it on parents or children
-                if (animator == null)
-                {
-                    animator = hit.collider.GetComponentInParent<Animator>();
-                }
-
-                if (animator != null)
-                {
-                    // Stop the random behavior script if it exists
-                    RandomChickenAnimation chickenAnim = animator.GetComponent<RandomChickenAnimation>();
-                    if (chickenAnim != null)
-                    {
-                        chickenAnim.StopAnimation();
-                    }
-
-                    RandomFoxAnimation foxAnim = animator.GetComponent<RandomFoxAnimation>();
-                    if (foxAnim != null)
-                    {
-                        foxAnim.StopAnimation();
-                    }
-
-                    // 교란용 여우 정지
-                    DecoyFoxAI decoyAnim = animator.GetComponent<DecoyFoxAI>();
-                    if (decoyAnim != null)
-                    {
-                        decoyAnim.StopAnimation();
-                    }
-
-                    MonsterAI monsterAnim = animator.GetComponent<MonsterAI>();
-                    if (monsterAnim != null)
-                    {
-                        // 괴물은 즉사가 아니라 자체 TakeDamage 로직 분기를 사용
-                        monsterAnim.TakeDamage(currentGunDamage, hit.point);
-                    }
-                    else
-                    {
-                        MutantAI mutantAnim = animator.GetComponent<MutantAI>();
-                        if (mutantAnim != null)
-                        {
-                            mutantAnim.TakeDamage(currentGunDamage, hit.point);
-                        }
-                        else
-                        {
-                            // Trigger the "Die" parameter
-                            animator.SetTrigger("Die");
-                            Debug.Log("Hit " + hit.collider.name + " and triggered Die animation.");
-                            
-                            // --- [신규 로직] 우측 상단 킬 정보 UI 갱신 (히트박스가 없는 동물을 쐈을 때) ---
-                            if (KillCountManager.Instance != null && (foxAnim != null || decoyAnim != null))
-                            {
-                                KillCountManager.Instance.AddKill();
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    Debug.Log("Hit " + hit.collider.name + " but no Animator found.");
-                }
-            }
-
-            // --- FLEE BEHAVIOR (Area of Effect) ---
-            Collider[] colliders = Physics.OverlapSphere(hit.point, fleeRadius);
-            foreach (Collider nearby in colliders)
-            {
-                // Don't apply flee behavior to the object we just shot directly
-                if (nearby.gameObject == hit.collider.gameObject) continue;
-
-                // Try to find chicken animation
-                RandomChickenAnimation chicken = nearby.GetComponent<RandomChickenAnimation>();
-                if (chicken == null) chicken = nearby.GetComponentInParent<RandomChickenAnimation>();
-                
-                if (chicken != null)
-                {
-                    chicken.FleeFrom(hit.point);
-                }
-
-                // Try to find fox animation
-                RandomFoxAnimation fox = nearby.GetComponent<RandomFoxAnimation>();
-                if (fox == null) fox = nearby.GetComponentInParent<RandomFoxAnimation>();
-
-                if (fox != null)
-                {
-                    fox.FleeFrom(hit.point);
-                }
-
-                // Try to find decoy fox animation
-                DecoyFoxAI decoyFox = nearby.GetComponent<DecoyFoxAI>();
-                if (decoyFox == null) decoyFox = nearby.GetComponentInParent<DecoyFoxAI>();
-
-                if (decoyFox != null)
-                {
-                    decoyFox.FleeFrom(hit.point);
-                }
-
-                MonsterAI monster = nearby.GetComponent<MonsterAI>();
-                if (monster == null) monster = nearby.GetComponentInParent<MonsterAI>();
-                if (monster != null) monster.FleeFrom(hit.point);
-            }
+            isNextShotAggro = false;
+            FireAggroBullet(ray);
+            return; // 일반 레이캐스트 발사 로직 건너뜀
         }
+        // ─────────────────────────────────────────────────────────────────
+
+        // ─── 관통탄 분기 ─────────────────────────────────────────────────
+        if (currentPenetration)
+        {
+            FirePenetrationRay(ray);
+        }
+        else
+        {
+            FireSingleRay(ray);
+        }
+        // ─────────────────────────────────────────────────────────────────
     }
 
     /// <summary>
@@ -425,97 +309,284 @@ public class RaycastShooter : MonoBehaviour
 
         // 핵심: 스코프 중앙 화면 좌표에서 레이캐스트
         Ray ray = mainCamera.ScreenPointToRay(new Vector3(screenPos.x, screenPos.y, 0f));
+
+        // ─── 어그로탄 분기 ────────────────────────────────────────────────
+        if (isNextShotAggro)
+        {
+            isNextShotAggro = false;
+            FireAggroBullet(ray);
+            return;
+        }
+        // ─────────────────────────────────────────────────────────────────
+
+        // ─── 관통탄 분기 ─────────────────────────────────────────────────
+        if (currentPenetration)
+        {
+            FirePenetrationRay(ray);
+        }
+        else
+        {
+            FireSingleRay(ray);
+        }
+        // ─────────────────────────────────────────────────────────────────
+    }
+
+    // =========================================================================
+    // --- 어그로탄 전용 함수 ---
+    // =========================================================================
+
+    /// <summary>
+    /// InGameUIBinder의 어그로 버튼 OnClick에서 호출됩니다.
+    /// 다음 한 발을 어그로탄으로 예약하고, 버튼을 비활성화합니다 (소모품 1회용).
+    /// </summary>
+    public void SetNextShotAsAggro()
+    {
+        isNextShotAggro = true;
+
+        // 버튼을 영구 비활성화 (소모품: 1회 예약 후 복구 없음)
+        if (InGameUIBinder.Instance != null && InGameUIBinder.Instance.aggroBulletButton != null)
+            InGameUIBinder.Instance.aggroBulletButton.gameObject.SetActive(false);
+
+        Debug.Log("[RaycastShooter] 어그로탄 예약 완료. 다음 발사 시 어그로탄이 날아갑니다.");
+    }
+
+    /// <summary>
+    /// 어그로탄을 발사합니다.
+    /// 착탄 위치에 AggroBulletMarker 프리팹을 생성하고 ShopItemData 수치를 주입합니다.
+    /// 일반 탄약은 소모하지 않습니다.
+    /// </summary>
+    private void FireAggroBullet(Ray ray)
+    {
+        ShopItemData aggroData = (InventoryManager.Instance != null)
+            ? InventoryManager.Instance.GetEquippedAggroAmmoData()
+            : null;
+
+        if (aggroData == null)
+        {
+            Debug.LogWarning("[RaycastShooter] 어그로탄 데이터를 찾을 수 없습니다!");
+            return;
+        }
+
         RaycastHit hit;
+        Vector3 spawnPos;
+
         if (Physics.Raycast(ray, out hit))
         {
-            Debug.DrawLine(ray.origin, hit.point, Color.green, 2f);
+            spawnPos = hit.point;
+            Debug.DrawLine(ray.origin, hit.point, Color.magenta, 3f);
+        }
+        else
+        {
+            // 아무것도 안 맞으면 레이 방향으로 100m 앞에 생성
+            spawnPos = ray.origin + ray.direction * 100f;
+        }
 
-            // 동적으로 맵이 생성되거나 파티클이 끊어졌을 때를 대비해 실시간으로 다시 찾기
-            if (bloodSplatter == null)
+        // AggroBulletMarker 프리팹 또는 빈 게임오브젝트 생성
+        GameObject markerGO = new GameObject("AggroBulletMarker");
+        markerGO.transform.position = spawnPos;
+
+        AggroBulletMarker marker = markerGO.AddComponent<AggroBulletMarker>();
+        marker.Init(aggroData);
+
+        Debug.Log($"[RaycastShooter] 어그로탄 착탄: {spawnPos}");
+    }
+
+    // =========================================================================
+    // --- 공통 발사 헬퍼 함수 (Shoot / ShootAt 양쪽에서 재사용) ---
+    // =========================================================================
+
+    /// <summary>
+    /// 일반(비관통) 레이캐스트 발사. 레이 위 최초 충돌 1개만 처리합니다.
+    /// </summary>
+    private void FireSingleRay(Ray ray)
+    {
+        RaycastHit hit;
+        if (!Physics.Raycast(ray, out hit)) return;
+
+        Debug.DrawLine(ray.origin, hit.point, Color.red, 2f);
+        PlayBloodAtPoint(hit.point, hit.normal, false); // 비관통: Play() 방식
+        ApplyHitDamage(hit.collider, hit.point);
+        ApplyFleeBehavior(hit.point, hit.collider.gameObject);
+    }
+
+    /// <summary>
+    /// 관통(Penetration) 레이캐스트 발사.
+    /// RaycastAll로 레이 위의 모든 충돌체를 거리 순으로 처리하며,
+    /// MutantAI / MonsterAI / Hitbox 계열이면 계속 관통, 그 외 오브젝트에 닿으면 중단합니다.
+    /// </summary>
+    private void FirePenetrationRay(Ray ray)
+    {
+        RaycastHit[] hits = Physics.RaycastAll(ray);
+
+        // 거리 오름차순 정렬 (가장 가까운 충돌체부터 순서대로 처리)
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        // 이미 데미지를 준 루트 오브젝트 중복 방지 Set
+        var damagedRoots = new System.Collections.Generic.HashSet<GameObject>();
+
+        foreach (RaycastHit hit in hits)
+        {
+            // 이 콜라이더가 속한 '뮤턴트/몬스터의 루트 오브젝트'인지 판별
+            bool isPenetrable = IsPenetrableTarget(hit.collider, out GameObject root);
+
+            if (isPenetrable)
             {
-                GameObject splatterObj = GameObject.Find("FX_BloodSplatter");
-                if (splatterObj != null)
-                {
-                    bloodSplatter = splatterObj.GetComponent<ParticleSystem>();
-                }
-            }
+                // 동일한 뮤턴트를 한 발에 여러 콜라이더로 여러 번 치지 않도록 중복 차단
+                if (root != null && damagedRoots.Contains(root)) continue;
+                if (root != null) damagedRoots.Add(root);
 
-            if (bloodSplatter != null)
-            {
-                bloodSplatter.transform.position = hit.point;
-                bloodSplatter.transform.rotation = Quaternion.LookRotation(hit.normal);
-                bloodSplatter.Play();
-            }
-
-            Hitbox hitbox = hit.collider.GetComponent<Hitbox>();
-            if (hitbox == null) hitbox = hit.collider.GetComponentInParent<Hitbox>();
-
-            if (hitbox != null)
-            {
-                hitbox.TakeDamage(currentGunDamage, hit.point);
+                Debug.DrawLine(ray.origin, hit.point, Color.cyan, 2f);
+                PlayBloodAtPoint(hit.point, hit.normal, true); // 관통: Emit() 방식 (Play 재시작 방지)
+                ApplyHitDamage(hit.collider, hit.point);
+                // 관통 대상은 Flee를 별도로 트리거하지 않아도 됨 (이미 맞았으므로)
             }
             else
             {
-                Animator animator = hit.collider.GetComponent<Animator>();
-                if (animator == null) animator = hit.collider.GetComponentInParent<Animator>();
-                if (animator != null)
+                // 뮤턴트가 아닌 오브젝트(땅, 건물, 울타리 등)에 닿으면 관통 중단
+                // 단, 트리거 콜라이더(투명 영역 판정용)는 무시하고 계속 통과
+                if (!hit.collider.isTrigger)
                 {
-                    RandomChickenAnimation chickenAnim = animator.GetComponent<RandomChickenAnimation>();
-                    if (chickenAnim != null) chickenAnim.StopAnimation();
-
-                    RandomFoxAnimation foxAnim = animator.GetComponent<RandomFoxAnimation>();
-                    if (foxAnim != null) foxAnim.StopAnimation();
-
-                    DecoyFoxAI decoyAnim = animator.GetComponent<DecoyFoxAI>();
-                    if (decoyAnim != null) decoyAnim.StopAnimation();
-
-                    MonsterAI monsterAnim = animator.GetComponent<MonsterAI>();
-                    if (monsterAnim != null)
-                    {
-                        monsterAnim.TakeDamage(currentGunDamage, hit.point);
-                    }
-                    else
-                    {
-                        MutantAI mutantAnim = animator.GetComponent<MutantAI>();
-                        if (mutantAnim != null)
-                        {
-                            mutantAnim.TakeDamage(currentGunDamage, hit.point);
-                        }
-                        else
-                        {
-                            animator.SetTrigger("Die");
-
-                            if (KillCountManager.Instance != null && (foxAnim != null || decoyAnim != null))
-                                KillCountManager.Instance.AddKill();
-                        }
-                    }
+                    Debug.DrawLine(ray.origin, hit.point, Color.yellow, 2f);
+                    // ★ 비관통 오브젝트에서도 파티클은 터져야 합니다.
+                    //    비관통탄과 동일하게 Play() 방식으로 1회 재생 후 중단합니다.
+                    PlayBloodAtPoint(hit.point, hit.normal, false);
+                    break;
                 }
             }
+        }
 
-            Collider[] colliders = Physics.OverlapSphere(hit.point, fleeRadius);
-            foreach (Collider nearby in colliders)
-            {
-                if (nearby.gameObject == hit.collider.gameObject) continue;
-                RandomChickenAnimation chicken = nearby.GetComponent<RandomChickenAnimation>();
-                if (chicken == null) chicken = nearby.GetComponentInParent<RandomChickenAnimation>();
-                if (chicken != null) chicken.FleeFrom(hit.point);
+        // 관통탄도 첫 번째 히트 지점에서 Flee 범위 트리거
+        if (hits.Length > 0)
+            ApplyFleeBehavior(hits[0].point, null);
+    }
 
-                RandomFoxAnimation fox = nearby.GetComponent<RandomFoxAnimation>();
-                if (fox == null) fox = nearby.GetComponentInParent<RandomFoxAnimation>();
-                if (fox != null) fox.FleeFrom(hit.point);
+    /// <summary>
+    /// 콜라이더가 뮤턴트/몬스터/히트박스 계열인지 확인합니다.
+    /// 해당하면 true와 함께 루트 오브젝트(AI 스크립트가 달린 최상단)를 반환합니다.
+    /// </summary>
+    private bool IsPenetrableTarget(Collider col, out GameObject root)
+    {
+        root = null;
 
-                DecoyFoxAI decoyFox = nearby.GetComponent<DecoyFoxAI>();
-                if (decoyFox == null) decoyFox = nearby.GetComponentInParent<DecoyFoxAI>();
-                if (decoyFox != null) decoyFox.FleeFrom(hit.point);
+        // Hitbox 체크 (여우/뮤턴트 등에 붙어있는 부위 콜라이더)
+        Hitbox hitbox = col.GetComponent<Hitbox>() ?? col.GetComponentInParent<Hitbox>();
+        if (hitbox != null)
+        {
+            root = hitbox.transform.root.gameObject;
+            return true;
+        }
 
-                MonsterAI monster = nearby.GetComponent<MonsterAI>();
-                if (monster == null) monster = nearby.GetComponentInParent<MonsterAI>();
-                if (monster != null) monster.FleeFrom(hit.point);
+        // MutantAI 체크
+        MutantAI mutant = col.GetComponent<MutantAI>() ?? col.GetComponentInParent<MutantAI>();
+        if (mutant != null) { root = mutant.gameObject; return true; }
 
-                MutantAI mutant = nearby.GetComponent<MutantAI>();
-                if (mutant == null) mutant = nearby.GetComponentInParent<MutantAI>();
-                if (mutant != null) mutant.FleeFrom(hit.point);
-            }
+        // MonsterAI 체크
+        MonsterAI monster = col.GetComponent<MonsterAI>() ?? col.GetComponentInParent<MonsterAI>();
+        if (monster != null) { root = monster.gameObject; return true; }
+
+        return false;
+    }
+
+    /// <summary>
+    /// BloodSplatter 파티클을 특정 위치에 재생합니다.
+    /// - useEmit = false (기본, 비관통): transform 이동 후 Play(). 파티클 시스템 Burst 전체 실행.
+    /// - useEmit = true (관통전용): Emit(N개). Play()는 시스템을 '재시작'하므로
+    ///   연속 호출 시 이전 파티클이 취소되는 버그가 있어, 관통탄에서는 Emit을 사용합니다.
+    /// </summary>
+    private void PlayBloodAtPoint(Vector3 point, Vector3 normal, bool useEmit = false)
+    {
+        if (bloodSplatter == null)
+        {
+            GameObject splatterObj = GameObject.Find("FX_BloodSplatter");
+            if (splatterObj != null)
+                bloodSplatter = splatterObj.GetComponent<ParticleSystem>();
+        }
+        if (bloodSplatter == null) return;
+
+        if (useEmit)
+        {
+            // 관통탄 전용: Emit() 방식
+            // Play()는 시스템을 재시작하여 이전 점의 파티클을 취소합니다.
+            // Emit()은 시스템 상태를 유지한 채 지정 위치에서 즉시 N개를 방출합니다.
+            var emitParams = new ParticleSystem.EmitParams();
+            emitParams.position               = point;
+            emitParams.rotation3D             = Quaternion.LookRotation(normal).eulerAngles;
+            emitParams.applyShapeToPosition   = true;
+            bloodSplatter.Emit(emitParams, penetrationBloodEmitCount);
+        }
+        else
+        {
+            // 비관통 기본: 위치/방향 이동 후 Play() — 원래 방식 그대로
+            bloodSplatter.transform.position = point;
+            bloodSplatter.transform.rotation = Quaternion.LookRotation(normal);
+            bloodSplatter.Play();
+        }
+    }
+
+    /// <summary>
+    /// 충돌한 콜라이더의 AI 스크립트를 탐색하여 적절한 TakeDamage / StopAnimation을 호출합니다.
+    /// Shoot / ShootAt / FireSingleRay / FirePenetrationRay 가 모두 이 함수를 공유합니다.
+    /// </summary>
+    private void ApplyHitDamage(Collider col, Vector3 hitPoint)
+    {
+        // --- 히트박스 (부위별 증폭 데미지) ---
+        Hitbox hitbox = col.GetComponent<Hitbox>() ?? col.GetComponentInParent<Hitbox>();
+        if (hitbox != null)
+        {
+            hitbox.TakeDamage(currentGunDamage, hitPoint);
+            Debug.Log($"[관통/히트박스] {col.name} 에 데미지 {currentGunDamage} 적용");
+            return;
+        }
+
+        // --- Animator 탐색 (히트박스 없는 캐릭터) ---
+        Animator animator = col.GetComponent<Animator>() ?? col.GetComponentInParent<Animator>();
+        if (animator == null) return;
+
+        RandomChickenAnimation chickenAnim = animator.GetComponent<RandomChickenAnimation>();
+        if (chickenAnim != null) { chickenAnim.StopAnimation(); return; }
+
+        RandomFoxAnimation foxAnim = animator.GetComponent<RandomFoxAnimation>();
+        if (foxAnim != null) { foxAnim.StopAnimation(); return; }
+
+        DecoyFoxAI decoyAnim = animator.GetComponent<DecoyFoxAI>();
+        if (decoyAnim != null) { decoyAnim.StopAnimation(); return; }
+
+        MonsterAI monsterAnim = animator.GetComponent<MonsterAI>();
+        if (monsterAnim != null) { monsterAnim.TakeDamage(currentGunDamage, hitPoint); return; }
+
+        MutantAI mutantAnim = animator.GetComponent<MutantAI>();
+        if (mutantAnim != null) { mutantAnim.TakeDamage(currentGunDamage, hitPoint); return; }
+
+        // 그 외 (기존 닭/여우 Die 트리거)
+        animator.SetTrigger("Die");
+        if (KillCountManager.Instance != null && (foxAnim != null || decoyAnim != null))
+            KillCountManager.Instance.AddKill();
+    }
+
+    /// <summary>
+    /// 착탄 지점 반경 내 동물들에게 Flee 신호를 보냅니다.
+    /// </summary>
+    private void ApplyFleeBehavior(Vector3 hitPoint, GameObject excludeObj)
+    {
+        Collider[] colliders = Physics.OverlapSphere(hitPoint, fleeRadius);
+        foreach (Collider nearby in colliders)
+        {
+            if (excludeObj != null && nearby.gameObject == excludeObj) continue;
+
+            RandomChickenAnimation chicken = nearby.GetComponent<RandomChickenAnimation>() ?? nearby.GetComponentInParent<RandomChickenAnimation>();
+            if (chicken != null) { chicken.FleeFrom(hitPoint); continue; }
+
+            RandomFoxAnimation fox = nearby.GetComponent<RandomFoxAnimation>() ?? nearby.GetComponentInParent<RandomFoxAnimation>();
+            if (fox != null) { fox.FleeFrom(hitPoint); continue; }
+
+            DecoyFoxAI decoyFox = nearby.GetComponent<DecoyFoxAI>() ?? nearby.GetComponentInParent<DecoyFoxAI>();
+            if (decoyFox != null) { decoyFox.FleeFrom(hitPoint); continue; }
+
+            MonsterAI monster = nearby.GetComponent<MonsterAI>() ?? nearby.GetComponentInParent<MonsterAI>();
+            if (monster != null) { monster.FleeFrom(hitPoint); continue; }
+
+            MutantAI mutant = nearby.GetComponent<MutantAI>() ?? nearby.GetComponentInParent<MutantAI>();
+            if (mutant != null) mutant.FleeFrom(hitPoint);
         }
     }
 

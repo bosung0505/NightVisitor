@@ -1498,6 +1498,8 @@ MonoBehaviour:
   runStepClip: {fileID: 8300000, guid: 81e25e7d664211447b05b3923c90fde0, type: 3}
   animWalkBool: IsWalking
   animRunTrigger: Run
+  animReactTrigger: React_Attack
+  reactAnimDuration: 1
   animLookAroundTrigger: LookAround
   animScreamTrigger: Scream
   animJumpAttackTrigger: JumpAttack
