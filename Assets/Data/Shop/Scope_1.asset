@@ -15,11 +15,32 @@ MonoBehaviour:
   itemName: High resolution thermal imaging scope
   category: 1
   itemIcon: {fileID: 21300000, guid: 31fea31bbeae02845b00f6a9adb857a0, type: 3}
+  inGameAmmoIcon: {fileID: 0}
   iconSize: {x: 50, y: 130}
   itemPrice: 0
   itemDescription: Support 2X maginificatioin / 640 resolution / detection distance
     150yd / Battery Efficiency 30
+  gunDamage: 1
+  shootSound: {fileID: 0}
+  recoilUp: 2
+  recoilSide: 1
+  hasPenetration: 0
   zoomMultiplier: 2
-  fogStartDistance: 30
+  fogStartDistance: 20
   fogEndDistance: 130
-  batteryEfficiencyMultiplier: 1.5
+  batteryEfficiencyMultiplier: 0.9
+  effectDelay: 0.5
+  smokeDelay: 1.5
+  effectDuration: 5
+  smokeFadeOutDuration: 1.5
+  aggroRadius: 20
+  circleRadius: 3
+  luredWalkSpeed: 1.2
+  explosionSFX: {fileID: 0}
+  explosionVolume: 1
+  explosionParticlePrefab: {fileID: 0}
+  explosionScale: 1
+  smokeSFX: {fileID: 0}
+  smokeVolume: 1
+  smokeParticlePrefab: {fileID: 0}
+  smokeScale: 1

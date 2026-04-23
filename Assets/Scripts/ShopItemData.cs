@@ -14,7 +14,13 @@ public class ShopItemData : ScriptableObject
     [Header("Item Basic Info")]
     public string itemName;
     public ItemCategory category;
+    
+    [Tooltip("상점과 인벤토리에서 보여질 기본 아이콘")]
     public Sprite itemIcon;
+    
+    [Tooltip("인게임 탄약 패널에서 활성화 시 보여질 아이콘 (비워두면 기본 아이콘 사용)")]
+    public Sprite inGameAmmoIcon;
+    
     public Vector2 iconSize = new Vector2(100f, 100f);
     public int itemPrice;
 

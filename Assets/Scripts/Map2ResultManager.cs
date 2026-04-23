@@ -190,6 +190,13 @@ public class Map2ResultManager : MonoBehaviour
         Time.timeScale = 0f;
         // 2. 뒤에서 들리는 모든 사운드 멈춤
         AudioListener.pause = true;
+        // 3. ★ 씬의 모든 MutantAI를 즉시 동결 (NavMesh 정지 + 애니메이션 정지)
+        //    JumpAttack 경로는 루프 내부에서 처리, 나머지(타이머 클리어/마을침략) 경로는 여기서 커버
+        MutantAI[] allMutants = UnityEngine.Object.FindObjectsByType<MutantAI>(UnityEngine.FindObjectsSortMode.None);
+        foreach (MutantAI m in allMutants)
+        {
+            m.StopAnimation();
+        }
 
         if (targetPanel != null)
         {
@@ -209,9 +216,6 @@ public class Map2ResultManager : MonoBehaviour
 
     private void OnReturnButtonClicked()
     {
-        // 사운드 정지 해제
-        AudioListener.pause = false;
-        
         HidePanel(survivePanel);
         HidePanel(villageInvadedPanel);
         HidePanel(youDiedPanel);
@@ -221,6 +225,11 @@ public class Map2ResultManager : MonoBehaviour
         {
             ssm.ReturnToMap();
         }
+
+        // ★ ReturnToMap()이 맵(GameObject) 전체를 Destroy한 직후에 AudioListener를 재개합니다.
+        //    순서가 반대이면 pause=false 직후 1프레임 동안 멈춰있던 AudioSource들이 재생되어
+        //    소리가 한 번 '빵' 터지는 사운드 글리치가 발생합니다.
+        AudioListener.pause = false;
     }
 
     private void HidePanel(CanvasGroup panel)

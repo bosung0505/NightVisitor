@@ -65,14 +65,20 @@ public class AggroBulletMarker : MonoBehaviour
         // AudioSource 2개 생성 (폭발 1회용 + 연막 루프용)
         explosionAudio = gameObject.AddComponent<AudioSource>();
         explosionAudio.playOnAwake  = false;
-        explosionAudio.volume       = explosionVolume;  // ★ 볼륨 적용
+        explosionAudio.volume       = explosionVolume;
         explosionAudio.spatialBlend = 1f; // 3D 사운드
+        explosionAudio.rolloffMode  = AudioRolloffMode.Linear; // ★ 핵심: 유니티 기본값(Logarithmic)의 급격한 볼륨 감소 방지
+        explosionAudio.minDistance  = 10f;  // 10미터 안에서는 원본 볼륨 100% 유지
+        explosionAudio.maxDistance  = 100f; // 100미터까지 서서히 감소
 
         smokeAudio = gameObject.AddComponent<AudioSource>();
         smokeAudio.playOnAwake  = false;
         smokeAudio.loop         = true;
-        smokeAudio.volume       = smokeVolume;          // ★ 볼륨 적용
+        smokeAudio.volume       = smokeVolume;
         smokeAudio.spatialBlend = 1f;
+        smokeAudio.rolloffMode  = AudioRolloffMode.Linear; // ★ 핵심
+        smokeAudio.minDistance  = 10f;
+        smokeAudio.maxDistance  = 100f;
 
         StartCoroutine(AggroSequenceRoutine());
     }
@@ -100,6 +106,9 @@ public class AggroBulletMarker : MonoBehaviour
             {
                 var main = ps.main;
                 main.scalingMode = ParticleSystemScalingMode.Hierarchy;
+                main.prewarm = false;
+                ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                ps.Play(true);
             }
             Destroy(expGO, 5f);
         }
@@ -127,10 +136,15 @@ public class AggroBulletMarker : MonoBehaviour
             {
                 var main = ps.main;
                 main.scalingMode = ParticleSystemScalingMode.Hierarchy;
+                main.prewarm = false; // 파티클이 켜질 때 ReStart 하는 것처럼 초기화
             }
             smokePS = smokeGO.GetComponent<ParticleSystem>();
             if (smokePS == null) smokePS = smokeGO.GetComponentInChildren<ParticleSystem>();
-            if (smokePS != null) smokePS.Play();
+            if (smokePS != null)
+            {
+                smokePS.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                smokePS.Play(true);
+            }
         }
         if (smokeSFX != null)
         {

@@ -46,6 +46,8 @@ public class RaycastShooter : MonoBehaviour
     public TextMeshProUGUI currentAmmoText;
     public TextMeshProUGUI reloadableAmmoText;
     public Button reloadButton;
+    public Image ammoIconImage; // 총알 아이콘
+    private Sprite defaultAmmoIcon; // 원본 총알 아이콘 저장용
 
     [Header("Impact Settings")]
     public float fleeRadius = 5f;
@@ -257,7 +259,6 @@ public class RaycastShooter : MonoBehaviour
         // ─── 어그로탄 분기 ────────────────────────────────────────────────
         if (isNextShotAggro)
         {
-            isNextShotAggro = false;
             FireAggroBullet(ray);
             return; // 일반 레이캐스트 발사 로직 건너뜀
         }
@@ -313,7 +314,6 @@ public class RaycastShooter : MonoBehaviour
         // ─── 어그로탄 분기 ────────────────────────────────────────────────
         if (isNextShotAggro)
         {
-            isNextShotAggro = false;
             FireAggroBullet(ray);
             return;
         }
@@ -337,17 +337,34 @@ public class RaycastShooter : MonoBehaviour
 
     /// <summary>
     /// InGameUIBinder의 어그로 버튼 OnClick에서 호출됩니다.
-    /// 다음 한 발을 어그로탄으로 예약하고, 버튼을 비활성화합니다 (소모품 1회용).
+    /// 토글식으로 작동하며, 다음 한 발을 어그로탄으로 지정/해제합니다.
     /// </summary>
     public void SetNextShotAsAggro()
     {
-        isNextShotAggro = true;
+        isNextShotAggro = !isNextShotAggro;
 
-        // 버튼을 영구 비활성화 (소모품: 1회 예약 후 복구 없음)
+        // 버튼 눌림 시각적 피드백 (어그로탄 색상 틴트)
         if (InGameUIBinder.Instance != null && InGameUIBinder.Instance.aggroBulletButton != null)
-            InGameUIBinder.Instance.aggroBulletButton.gameObject.SetActive(false);
+        {
+            Image btnImg = InGameUIBinder.Instance.aggroBulletButton.GetComponent<Image>();
+            if (btnImg != null)
+            {
+                // 눌려있으면 주황색, 아니면 하얀색으로 복구
+                btnImg.color = isNextShotAggro ? new Color(1f, 0.8f, 0.2f, 1f) : Color.white;
+            }
+        }
 
-        Debug.Log("[RaycastShooter] 어그로탄 예약 완료. 다음 발사 시 어그로탄이 날아갑니다.");
+        UpdateAmmoUI();
+        Debug.Log($"[RaycastShooter] 어그로탄 토글 상태: {(isNextShotAggro ? "활성화" : "해제")}");
+    }
+
+    /// <summary>
+    /// 외부(UIBinder 등)에서 어그로 탄 사용 불가능한 상태가 될 때 원격으로 초기화
+    /// </summary>
+    public void ForceCancelAggroShot()
+    {
+        isNextShotAggro = false;
+        UpdateAmmoUI();
     }
 
     /// <summary>
@@ -367,28 +384,50 @@ public class RaycastShooter : MonoBehaviour
             return;
         }
 
+        // =====================================================
+        // 발사 시도 시 즉시 어그로탄 토글 해제 및 소모 처리
+        // (허공에 날렸든 맞췄든 무조건 1회 소모됨)
+        // =====================================================
+        isNextShotAggro = false;
+        UpdateAmmoUI(); // 토글 아이콘 등 복구
+        
+        if (InGameUIBinder.Instance != null && InGameUIBinder.Instance.aggroBulletButton != null)
+        {
+            // 사용했으니 버튼은 숨깁니다
+            InGameUIBinder.Instance.aggroBulletButton.gameObject.SetActive(false);
+            
+            // 색상도 흰색으로 초기화해 둡니다
+            Image btnImg = InGameUIBinder.Instance.aggroBulletButton.GetComponent<Image>();
+            if (btnImg != null) btnImg.color = Color.white;
+        }
+
         RaycastHit hit;
-        Vector3 spawnPos;
-
-        if (Physics.Raycast(ray, out hit))
+        if (!Physics.Raycast(ray, out hit))
         {
-            spawnPos = hit.point;
-            Debug.DrawLine(ray.origin, hit.point, Color.magenta, 3f);
-        }
-        else
-        {
-            // 아무것도 안 맞으면 레이 방향으로 100m 앞에 생성
-            spawnPos = ray.origin + ray.direction * 100f;
+            // 허공에 쏘았을 경우 작동 취소. 복구 로직 파기! (그냥 날림)
+            Debug.Log("[RaycastShooter] 허공에 발사하여 어그로탄이 낭비되었습니다.");
+            return;
         }
 
-        // AggroBulletMarker 프리팹 또는 빈 게임오브젝트 생성
+        Vector3 spawnPos = hit.point;
+        Debug.DrawLine(ray.origin, hit.point, Color.magenta, 3f);
+
+        // --- 맞은 대상에게 딜링 및 피격 이펙트 즉시 적용 ---
+        PlayBloodAtPoint(hit.point, hit.normal, false);
+        ApplyHitDamage(hit.collider, hit.point);
+
+        // --- AggroBulletMarker 생성 ---
         GameObject markerGO = new GameObject("AggroBulletMarker");
         markerGO.transform.position = spawnPos;
+        markerGO.transform.rotation = Quaternion.LookRotation(hit.normal);
+        
+        // 대상(Hitbox 또는 몸통 등)에 부착하여 대상이 움직일 때 연막도 따라가게 함
+        markerGO.transform.SetParent(hit.collider.transform, true);
 
         AggroBulletMarker marker = markerGO.AddComponent<AggroBulletMarker>();
         marker.Init(aggroData);
 
-        Debug.Log($"[RaycastShooter] 어그로탄 착탄: {spawnPos}");
+        Debug.Log($"[RaycastShooter] 어그로탄 착탄: {spawnPos}, 부착 대상: {hit.collider.name}");
     }
 
     // =========================================================================
@@ -705,6 +744,26 @@ public class RaycastShooter : MonoBehaviour
             // 요구사항: 예비 탄력이 0 이하면 버튼 비활성화
             // (또한 장전 중일 때도 클릭되지 않게 방지)
             reloadButton.interactable = (currentReloadableAmmo > 0 && !isReloading && currentAmmo < maxAmmoPerMag);
+        }
+
+        // --- 어그로 토글 상태에 따른 총알 이미지 변경 ---
+        if (ammoIconImage != null)
+        {
+            if (defaultAmmoIcon == null)
+            {
+                defaultAmmoIcon = ammoIconImage.sprite;
+            }
+
+            if (isNextShotAggro && InventoryManager.Instance != null && InventoryManager.Instance.GetEquippedAggroAmmoData() != null)
+            {
+                ShopItemData aggroData = InventoryManager.Instance.GetEquippedAggroAmmoData();
+                ammoIconImage.sprite = (aggroData.inGameAmmoIcon != null) ? aggroData.inGameAmmoIcon : aggroData.itemIcon;
+            }
+            else
+            {
+                if (defaultAmmoIcon != null)
+                    ammoIconImage.sprite = defaultAmmoIcon;
+            }
         }
     }
 }

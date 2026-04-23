@@ -105,12 +105,17 @@ public class MutantAI : MonoBehaviour
     public AudioClip screamClip;
     [Tooltip("사망 시 모든 소리를 끊고 재생할 사망 소리 파일")]
     public AudioClip deathClip;
+    [Tooltip("발소리 및 포효 소리의 피치 배율.\n  일반 뮤턴트: 1.0 (기본값)\n  TankerMutant: 0.65 ~ 0.75 권장 (묵직하고 낮은 목소리)")]
+    [Range(0.3f, 1.5f)]
+    public float voicePitchMultiplier = 1.0f;
     
     [Header("Footstep Audio Settings")]
     [Tooltip("걷기 발자국 소리 루프")]
     public AudioClip walkStepClip;
     [Tooltip("뛰어오기(돌진) 발자국 소리 루프")]
     public AudioClip runStepClip;
+    [Tooltip("기어가기(질질 끄는) 사운드 배열 (여러 개 넣으면 랜덤으로 재생됩니다)")]
+    public AudioClip[] crawlStepClips;
 
     [Header("Animation Settings (Triggers/Bools)")]
     public string animWalkBool = "IsWalking";
@@ -200,7 +205,7 @@ public class MutantAI : MonoBehaviour
     private IEnumerator IdleWalkRoutine()
     {
         // 피격받지 않고, 살아있고, ToEntrance 상태일 때만 반복
-        while (currentPhase == MutantPhase.ToEntrance && !isDead)
+        while (currentPhase == MutantPhase.ToEntrance && !isDead && !KillCountManager.isGameEnding)
         {
             if (isReacting) 
             {
@@ -231,6 +236,9 @@ public class MutantAI : MonoBehaviour
 
     void Update()
     {
+        // ★ 게임 종료 플래그 — 이 이후 모든 이동/AI 로직을 즉시 차단
+        if (KillCountManager.isGameEnding) return;
+
         // 죽었거나, 리액션 중이거나, 요원이 없으면 이동 로직 전체 무시
         if (isDead || isReacting || agent == null) return;
         // 어그로탄에 끽린 상태에서는 AggroLuredRoutine이 전담 담당 — Update 이동로직 전체 건너뜀
@@ -531,6 +539,7 @@ public class MutantAI : MonoBehaviour
                 else
                 {
                     Debug.Log("✅ [MutantAI] 스크립트에서 정상적으로 오디오 재생 명령(PlayOneShot)을 실행했습니다!");
+                    audioSource.pitch = 1.0f * voicePitchMultiplier; // ★ tanker 등 피치 배율 적용
                     audioSource.PlayOneShot(screamClip);
                 }
                 
@@ -598,7 +607,11 @@ public class MutantAI : MonoBehaviour
         }
 
         animator.SetTrigger(animScreamTrigger);
-        if (audioSource != null && screamClip != null) audioSource.PlayOneShot(screamClip);
+        if (audioSource != null && screamClip != null)
+        {
+            audioSource.pitch = 1.0f * voicePitchMultiplier; // ★ tanker 등 피치 배율 적용
+            audioSource.PlayOneShot(screamClip);
+        }
 
         BroadcastAggro();
 
@@ -651,13 +664,14 @@ public class MutantAI : MonoBehaviour
         // 점프의 '정점(최고 높이)'에서 게임을 끊내기 위해 반복문 절반 실행
         float peakTime = jumpDuration * 0.5f;
 
-        // ★ 나머지 모든 NavMeshAgent(= 다른 뒤턴트)를 우선 정지
-        //    (timeScale=0로도 자동 정지되지만, 추가 보험 차원에서 명시적으로 정지)
+        // ★ 나머지 모든 MutantAI를 즉시 동결 (NavMesh 정지 + 애니메이션 정지)
+        //    (timeScale=0로도 Normal 모드는 자동 정지되지만, 이 루프 도중에는 아직 timeScale=1이므로
+        //     명시적으로 StopAnimation()을 호출해 프리즈를 보장합니다.)
         MutantAI[] allMutants = FindObjectsByType<MutantAI>(FindObjectsSortMode.None);
         foreach (MutantAI m in allMutants)
         {
             if (m == this) continue;
-            if (m.agent != null && m.agent.enabled) m.agent.isStopped = true;
+            m.StopAnimation(); // agent.isStopped = true + animator.speed = 0 동시 처리
         }
 
         while (timer < peakTime)
@@ -739,6 +753,7 @@ public class MutantAI : MonoBehaviour
         if (audioSource != null && !wasCrawling)
         {
             audioSource.Stop();
+            audioSource.pitch = 1.0f; // 사망 비명소리 정상 속도 복구
             if (deathClip != null) audioSource.PlayOneShot(deathClip);
         }
 
@@ -826,10 +841,25 @@ public class MutantAI : MonoBehaviour
         // 닭이나 여우와 달리 몬스터는 총기 소음에 패닉 도주하지 않음
     }
 
+    /// <summary>
+    /// 게임 종료 시 이 뮤턴트를 완전히 동결합니다.
+    /// NavMesh 이동 + 관성 + 코루틴 + 애니메이션을 모두 즉시 정지합니다.
+    /// </summary>
     public void StopAnimation()
     {
-        if(agent != null) agent.isStopped = true;
-        animator.speed = 0; 
+        // 1. 모든 코루틴 강제 종료 (IdleWalk, AggroLured 등이 다음 프레임에 isStopped=false를 다시 풀지 못하게)
+        StopAllCoroutines();
+
+        // 2. NavMeshAgent 완전 비활성화 (isStopped만으로는 관성이 남아 미끄러짐)
+        if (agent != null)
+        {
+            agent.isStopped = true;
+            agent.velocity  = Vector3.zero; // 현재 관성 즉시 소멸
+            agent.enabled   = false;        // 에이전트 자체를 꺼서 어떤 경로 계산도 차단
+        }
+
+        // 3. 애니메이터 속도 0 (현재 프레임에서 완전히 정지)
+        if (animator != null) animator.speed = 0;
     }
 
     private IEnumerator StopBloodParticleRoutine(ParticleSystem[] pSystems, float duration)
@@ -852,7 +882,7 @@ public class MutantAI : MonoBehaviour
     {
         if (audioSource != null && walkStepClip != null && !isDead)
         {
-            // 발을 밟는 강도가 매번 다른 것처럼 세기(Volume)를 무작위 조절합니다.
+            audioSource.pitch = 1.0f * voicePitchMultiplier; // ★ tanker 등 피치 배율 적용
             float randomVol = UnityEngine.Random.Range(0.6f, 1.0f);
             audioSource.PlayOneShot(walkStepClip, randomVol);
         }
@@ -862,9 +892,27 @@ public class MutantAI : MonoBehaviour
     {
         if (audioSource != null && runStepClip != null && !isDead)
         {
-            // 뛰는 발소리는 걷는 발소리보다 기본적으로 더 강하고 묵직하게 소리납니다.
+            audioSource.pitch = 1.0f * voicePitchMultiplier; // ★ tanker 등 피치 배율 적용
             float randomVol = UnityEngine.Random.Range(0.85f, 1.0f);
             audioSource.PlayOneShot(runStepClip, randomVol);
+        }
+    }
+
+    public void PlayCrawlFootstep()
+    {
+        if (audioSource != null && crawlStepClips != null && crawlStepClips.Length > 0 && !isTrueDead)
+        {
+            AudioClip randomClip = crawlStepClips[UnityEngine.Random.Range(0, crawlStepClips.Length)];
+            
+            if (randomClip != null)
+            {
+                // 이전 사운드가 아직 길게 재생 중이라면 겹치지 않게 강제로 끕니다.
+                audioSource.Stop(); 
+                
+                audioSource.pitch = 0.7f; // ★ 사운드 재생 속도를 0.7배로 늦춰 묵직하고 질질 끄는 느낌 부여
+                float randomVol = UnityEngine.Random.Range(0.3f, 0.5f); // ★ 요청하신 대로 볼륨을 0.3~0.5 사이로 낮춤
+                audioSource.PlayOneShot(randomClip, randomVol);
+            }
         }
     }
 
@@ -890,6 +938,13 @@ public class MutantAI : MonoBehaviour
 
     public void OnHearAggro()
     {
+        // 냅다 달리는 러너(startAsRunner)는 다른 뮤턴트의 비명(체인 어그로)을 무시하고 갈 길을 갑니다.
+        if (startAsRunner) return;
+
+        // ★ 어그로탄에 끌려있는 중이거나 면역 상태라면 체인 어그로 신호를 완전 무시
+        //    어그로탄이 가장 강한 어그로 우선순위를 가져야 합니다.
+        if (currentPhase == MutantPhase.AggroLured || isAggroLureImmune) return;
+
         // 옵션 B 적용: 죽었거나, 죽은 척(가짜 죽음 대기) 중이거나, 이미 쫓고 있는 등 한가하지 않은 상태면 무지성 100% 무시합니다.
         if (isDead || isReacting || currentPhase == MutantPhase.ChasePlayer || currentPhase == MutantPhase.Crawling) return;
 
@@ -941,6 +996,7 @@ public class MutantAI : MonoBehaviour
         animator.SetTrigger(animScreamTrigger);
         if (audioSource != null && screamClip != null)
         {
+            audioSource.pitch = 1.0f * voicePitchMultiplier; // ★ tanker 등 피치 배율 적용
             audioSource.PlayOneShot(screamClip);
         }
 
@@ -1052,29 +1108,50 @@ public class MutantAI : MonoBehaviour
         isAggroLureImmune = false;
         isReacting        = false;
 
-        // 체력만 유지, Phase는 처음 생성된 것처럼 ToEntrance로 초기화
-        currentPhase    = MutantPhase.ToEntrance;
-        isChaseRunning  = false;
-        isFullyAlerted  = false;
-
-        // 이동 정상화
-        if (agent != null)
+        if (startAsRunner)
         {
-            agent.isStopped     = false;
-            agent.speed         = walkSpeed;
-            agent.updateRotation = true;
-            agent.velocity      = Vector3.zero;
+            // 러너 전용 복귀 로직
+            currentPhase = MutantPhase.ToInvasion;
+            isChaseRunning = true;
+            isFullyAlerted = true;
+
+            if (agent != null)
+            {
+                agent.isStopped = false;
+                agent.speed = runSpeed;
+                agent.updateRotation = true;
+                agent.velocity = Vector3.zero;
+            }
+            animator.SetBool(animWalkBool, false);
+            animator.SetTrigger(animRunTrigger);
+            Debug.Log($"[MutantAI] {name} → 어그로 만료. 러너 상태(ToInvasion) 복귀.");
         }
-
-        animator.SetBool(animWalkBool, false);
-
-        // ToEntrance 루프 재시작
-        if (villageEntrance != null)
+        else
         {
-            phase1Coroutine = StartCoroutine(IdleWalkRoutine());
-        }
+            // 일반 뮤턴트 복귀 로직: 체력만 유지, Phase는 처음 생성된 것처럼 ToEntrance로 초기화
+            currentPhase    = MutantPhase.ToEntrance;
+            isChaseRunning  = false;
+            isFullyAlerted  = false;
 
-        Debug.Log($"[MutantAI] {name} → 어그로 만료. ToEntrance 재시작.");
+            // 이동 정상화
+            if (agent != null)
+            {
+                agent.isStopped     = false;
+                agent.speed         = walkSpeed;
+                agent.updateRotation = true;
+                agent.velocity      = Vector3.zero;
+            }
+
+            animator.SetBool(animWalkBool, false);
+
+            // ToEntrance 루프 재시작
+            if (villageEntrance != null)
+            {
+                phase1Coroutine = StartCoroutine(IdleWalkRoutine());
+            }
+
+            Debug.Log($"[MutantAI] {name} → 어그로 만료. ToEntrance 재시작.");
+        }
     }
 
     /// <summary>

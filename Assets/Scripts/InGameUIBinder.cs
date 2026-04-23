@@ -19,6 +19,8 @@ public class InGameUIBinder : MonoBehaviour
     public TextMeshProUGUI currentAmmoText;
     public TextMeshProUGUI reloadableAmmoText;
     public Button reloadButton;
+    [Tooltip("탄약 UI 패널 오른쪽에 위치한 총알 아이콘 이미지")]
+    public Image ammoIconImage;
 
     [Header("Aggro Bullet UI (Map 2 Only)")]
     [Tooltip("어그로 탄 발사 버튼. Map2 패널에만 달고 부모 게임오브젝트 비활성화로 두세요.")]
@@ -61,6 +63,7 @@ public class InGameUIBinder : MonoBehaviour
             {
                 shooter.currentAmmoText = currentAmmoText;
                 shooter.reloadableAmmoText = reloadableAmmoText;
+                shooter.ammoIconImage = ammoIconImage;
                 
                 // 이전 UI 껍데기 버튼에 연결되어 있던 리스너 제거 (오류 및 누수 방지)
                 if (shooter.reloadButton != null)
@@ -116,7 +119,18 @@ public class InGameUIBinder : MonoBehaviour
 
         aggroBulletButton.gameObject.SetActive(shouldShow);
 
-        if (shouldShow)
+        // 어그로 탄을 사용할 수 없는 상태가 되면 켜져있던 토글 강제 해제 및 모양 복구
+        if (!shouldShow)
+        {
+            Image btnImg = aggroBulletButton.GetComponent<Image>();
+            if (btnImg != null) btnImg.color = Color.white;
+
+            if (RaycastShooter.Instance != null)
+            {
+                RaycastShooter.Instance.ForceCancelAggroShot();
+            }
+        }
+        else
         {
             // 기존 리스너 누적 방지 후 연결
             aggroBulletButton.onClick.RemoveAllListeners();

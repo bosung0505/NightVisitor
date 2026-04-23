@@ -483,6 +483,23 @@ public class StageSelectManager : MonoBehaviour
         // 1. 남은 클론 여우들 삭제
         CleanUpActiveFoxes();
 
+        // ★★ [사운드 글리치 근본 해결] Destroy()는 프레임 끝에 지연 실행됩니다.
+        //    → Time.timeScale=1 복구 또는 AudioListener.pause=false 시점에 AudioSource가 아직
+        //      살아있어 멈춰있던 소리가 한 번 '빵' 터지는 글리치가 발생합니다.
+        //    → 해결책: Destroy 전에 맵과 씬의 모든 AudioSource를 명시적으로 Stop() 합니다.
+        if (currentInstantiatedMap != null)
+        {
+            AudioSource[] mapAudioSources = currentInstantiatedMap.GetComponentsInChildren<AudioSource>(true);
+            foreach (AudioSource src in mapAudioSources) if (src != null) src.Stop();
+        }
+
+        // 카메라에 붙어있는 AudioSource도 전부 정지 (심장박동 SFX 등 포함)
+        if (Camera.main != null)
+        {
+            AudioSource[] camAudioSources = Camera.main.GetComponentsInChildren<AudioSource>(true);
+            foreach (AudioSource src in camAudioSources) if (src != null) src.Stop();
+        }
+
         // 2. ★ 맵 프리팹 완전 삭제 (메모리 100% 반환)
         if (currentInstantiatedMap != null)
         {
@@ -494,13 +511,11 @@ public class StageSelectManager : MonoBehaviour
             CameraController camController = Camera.main.GetComponent<CameraController>();
             if (camController != null) camController.ForceZoomOff();
 
-            // 맵으로 돌아갈 땐 비 무조건 끄기 및 사운드 정지
+            // 맵으로 돌아갈 땐 비 무조건 끄기 (AudioSource는 위에서 이미 Stop됨)
             Transform rainTransform = Camera.main.transform.Find("RainParticles");
             if (rainTransform != null)
             {
                 rainTransform.gameObject.SetActive(false);
-                AudioSource rainAudio = rainTransform.GetComponent<AudioSource>();
-                if (rainAudio != null) rainAudio.Stop();
             }
         }
 

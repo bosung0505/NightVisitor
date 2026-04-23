@@ -20,7 +20,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: M_Zombie_Mutant
+  m_Name: M_Zombie_Mutant_Tanker
   m_Shader: {fileID: -6465566751694194690, guid: 8c91da644c791734c80f775c7de97145, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
@@ -179,7 +179,7 @@ Material:
     - _dirt: 0.581
     - _roug: 0.5
     m_Colors:
-    - _Base: {r: 0.14716971, g: 0.14716971, b: 0.14716971, a: 0}
+    - _Base: {r: 0.335849, g: 0.335849, b: 0.335849, a: 0}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _Curvature_1_C: {r: 0, g: 0, b: 0, a: 0}
     - _Curvature_2_C: {r: 0, g: 0, b: 0, a: 0}
@@ -188,11 +188,11 @@ Material:
     - _cavity_C: {r: 0, g: 0, b: 0, a: 0}
     - _dirt_C: {r: 0, g: 0, b: 0, a: 0}
     - _eye: {r: 0, g: 0, b: 0, a: 0}
-    - _head: {r: 0.19999999, g: 0.19999999, b: 0.19999999, a: 0}
+    - _head: {r: 0.335849, g: 0.335849, b: 0.335849, a: 0}
     - _jaw: {r: 0.4339623, g: 0, b: 0, a: 0}
     - _leg_hand: {r: 0, g: 0, b: 0, a: 0}
     - _meat: {r: 0.3018868, g: 0.009470959, b: 0, a: 0}
-    - _meat3: {r: 0.4037736, g: 0, b: 0, a: 0}
+    - _meat3: {r: 0.9528302, g: 0, b: 0, a: 0}
     - _meat_2: {r: 0.5924529, g: 0.5924529, b: 0.5924529, a: 0}
     - _nails: {r: 0.26415092, g: 0.24480507, b: 0.22054109, a: 0}
     - _prish: {r: 0.6320754, g: 0.31673393, b: 0.014907437, a: 0}

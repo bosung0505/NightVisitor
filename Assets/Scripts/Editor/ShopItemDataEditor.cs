@@ -7,6 +7,7 @@ public class ShopItemDataEditor : Editor
     private SerializedProperty itemNameProp;
     private SerializedProperty categoryProp;
     private SerializedProperty itemIconProp;
+    private SerializedProperty inGameAmmoIconProp;
     private SerializedProperty iconSizeProp;
     private SerializedProperty itemPriceProp;
     private SerializedProperty itemDescriptionProp;
@@ -47,6 +48,7 @@ public class ShopItemDataEditor : Editor
         itemNameProp = serializedObject.FindProperty("itemName");
         categoryProp = serializedObject.FindProperty("category");
         itemIconProp = serializedObject.FindProperty("itemIcon");
+        inGameAmmoIconProp = serializedObject.FindProperty("inGameAmmoIcon");
         iconSizeProp = serializedObject.FindProperty("iconSize");
         itemPriceProp = serializedObject.FindProperty("itemPrice");
 
@@ -93,6 +95,7 @@ public class ShopItemDataEditor : Editor
         EditorGUILayout.PropertyField(itemNameProp);
         EditorGUILayout.PropertyField(categoryProp);
         EditorGUILayout.PropertyField(itemIconProp);
+        EditorGUILayout.PropertyField(inGameAmmoIconProp);
         EditorGUILayout.PropertyField(iconSizeProp);
         EditorGUILayout.PropertyField(itemPriceProp);
 

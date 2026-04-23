@@ -1496,6 +1496,9 @@ MonoBehaviour:
   deathClip: {fileID: 8300000, guid: 983b344e461f1c24eb9fd4a066dfdec4, type: 3}
   walkStepClip: {fileID: 8300000, guid: d60142e2da368444495deaa2c3798a1b, type: 3}
   runStepClip: {fileID: 8300000, guid: 81e25e7d664211447b05b3923c90fde0, type: 3}
+  crawlStepClips:
+  - {fileID: 8300000, guid: 28b47fdf2ce8f5942803c44b518d2325, type: 3}
+  - {fileID: 8300000, guid: 037461d09d75a1c498ff1af59fff874e, type: 3}
   animWalkBool: IsWalking
   animRunTrigger: Run
   animReactTrigger: React_Attack
