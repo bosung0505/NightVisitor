@@ -85,18 +85,27 @@ public class MutantSpawner : MonoBehaviour
         {
             if (group.mutantPrefabs[i] == null) continue;
 
-            // SpawnPoint가 있으면 그 위치, 없으면 스포너 오브젝트 위치
             Transform pt = (group.spawnPoints != null && i < group.spawnPoints.Length && group.spawnPoints[i] != null)
                 ? group.spawnPoints[i]
                 : transform;
 
-            GameObject obj = Instantiate(group.mutantPrefabs[i], pt.position, pt.rotation);
+            GameObject obj = null;
+            if (ObjectPoolManager.Instance != null)
+            {
+                obj = ObjectPoolManager.Instance.SpawnFromPool(group.mutantPrefabs[i].name, pt.position, pt.rotation);
+            }
+            else
+            {
+                obj = Instantiate(group.mutantPrefabs[i], pt.position, pt.rotation);
+            }
+            
             spawnedMutants.Add(obj);
 
             // ★ 스테이지/그룹 설정의 각종 속성 주입
             MutantAI ai = obj.GetComponent<MutantAI>();
             if (ai != null)
             {
+                ai.ResetState(); // 풀링용 상태 초기화
                 ai.SetRevive(group.enableRevive); // 스테이지 공통에서 그룹 개별 방식으로 변경
                 // 0이면 기본값 3 자동 적용
                 int hp = group.maxHitPoints > 0 ? group.maxHitPoints : 3;
@@ -121,12 +130,16 @@ public class MutantSpawner : MonoBehaviour
         }
     }
 
-    /// <summary>이미 생성된 뮤턴트 클론 전부 삭제합니다.</summary>
+    /// <summary>이미 생성된 뮤턴트 클론 전부 삭제 (또는 풀로 반환) 합니다.</summary>
     public void ClearAllSpawnedMutants()
     {
         foreach (GameObject m in spawnedMutants)
         {
-            if (m != null) Destroy(m);
+            if (m != null)
+            {
+                if (ObjectPoolManager.Instance != null) ObjectPoolManager.Instance.ReturnToPool(m);
+                else Destroy(m);
+            }
         }
         spawnedMutants.Clear();
     }

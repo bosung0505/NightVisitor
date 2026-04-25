@@ -90,6 +90,38 @@ public class RandomFoxAnimation : MonoBehaviour
         SetState(FoxState.Walk);
     }
 
+    /// <summary>
+    /// 오브젝트 풀링을 위해 이전 상태를 초기화하는 함수입니다.
+    /// 스포너에서 꺼낼 때 호출합니다.
+    /// </summary>
+    public void ResetState()
+    {
+        currentHealth = maxHealth;
+        isJumpMoving = false;
+        destUpdateTimer = 0f;
+        
+        if (catchChickenObj != null) catchChickenObj.SetActive(false);
+        
+        this.enabled = true;
+        
+        if (agent != null)
+        {
+            agent.enabled = true;
+            agent.isStopped = false;
+            agent.updateRotation = true;
+            agent.updatePosition = true;
+            agent.ResetPath();
+        }
+
+        if (animator != null)
+        {
+            animator.Rebind();
+            animator.Update(0f);
+        }
+
+        SetState(FoxState.Walk);
+    }
+
     void Update()
     {
         if (currentState == FoxState.Dead || currentState == FoxState.Catching) 
@@ -360,9 +392,15 @@ public class RandomFoxAnimation : MonoBehaviour
             yield return new WaitForSeconds(0.5f); // 0.5초마다 검사
         }
         
-        // Optionally add a fade-out effect here by shrinking or adjusting materials
-        // For now, we will just silently remove the fox from the scene
-        Destroy(gameObject);
+        // 시야 밖으로 사라졌으므로 파괴 대신 풀에 반납
+        if (ObjectPoolManager.Instance != null)
+        {
+            ObjectPoolManager.Instance.ReturnToPool(gameObject);
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 
     private Vector3 GetDestinationDefault()
@@ -572,12 +610,40 @@ public class RandomFoxAnimation : MonoBehaviour
             {
                 KillCountManager.Instance.AddKill();
             }
+
+            // 사망 시 콜라이더 비활성화 후 15초 뒤 가라앉기 코루틴 시작
+            Collider[] colliders = GetComponentsInChildren<Collider>();
+            foreach (var col in colliders) col.enabled = false;
+            
+            StartCoroutine(SinkAndReturnRoutine());
         }
         else
         {
             // 생존했으면 도망가기 (이미 Escape 중이라면 FleeFrom 내부에서 알아서 무시됨)
             FleeFrom(hitPoint);
         }
+    }
+
+    private IEnumerator SinkAndReturnRoutine()
+    {
+        yield return new WaitForSeconds(15f);
+
+        float sinkDuration = 3f;
+        float elapsed = 0f;
+        Vector3 startPos = transform.position;
+        Vector3 targetPos = startPos - new Vector3(0, 2.5f, 0);
+
+        while (elapsed < sinkDuration)
+        {
+            if (KillCountManager.isGameEnding) yield break;
+            
+            elapsed += Time.deltaTime;
+            transform.position = Vector3.Lerp(startPos, targetPos, elapsed / sinkDuration);
+            yield return null;
+        }
+
+        if (ObjectPoolManager.Instance != null) ObjectPoolManager.Instance.ReturnToPool(gameObject);
+        else Destroy(gameObject);
     }
 
     // 주어진 위치(center) 근처 반경(radius) 내에서 항상 안전하고 도달 가능한 가장 가까운 NavMesh 좌표를 반환하는 함수

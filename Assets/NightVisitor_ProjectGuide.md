@@ -614,5 +614,36 @@ public enum MutantPhase { ToEntrance, ToInvasion, ChasePlayer, Crawling, AggroLu
 4. **Map2 InGameUIBinder** → `Is Map2 UI Panel` ✅ 체크 (Map1 UIBinder는 체크 해제)
 
 ---
+
+## 33. 로딩 스크린 및 최적화 풀링(Pooling) 시스템 (2026.04.25 ~ 04.26 추가)
+
+### 기획 배경
+모바일 기기 발열 방지 및 게임 중 프레임 스파이크(렉)를 원천 차단하기 위한 시스템. 거대한 맵을 생성하고 50마리가 넘는 적들을 실시간으로 `Instantiate/Destroy` 할 때 발생하는 메모리 병목 현상을 해결하기 위해 **로딩 스크린**과 **오브젝트 풀링**을 결합했습니다.
+
+### 만능 오브젝트 풀링 매니저 (`ObjectPoolManager.cs`)
+- **`PreWarm(prefab, count)`**: 로딩 화면이 떠 있는 동안 특정 프리팹을 `count` 개수만큼 미리 복제하여 메모리에 올려두고 비활성화(Queue 보관)합니다.
+- **`SpawnFromPool` & `ReturnToPool`**: 게임 도중 무거운 개체(뮤턴트, 여우, 파티클 등)를 필요할 때 큐에서 꺼내 쓰고, 소멸할 때 파괴(Destroy)하는 대신 큐로 반환합니다.
+- **`ClearAllPools()`**: 스테이지가 끝나고 맵으로 돌아갈 때 메모리를 100% 깔끔하게 비웁니다.
+
+### 로딩 스크린 연동 (`StageSelectManager.cs`)
+- `StartGameRoutine` 코루틴을 통해 스테이지 시작 시 즉시 블랙스크린(LoadingPanel)을 활성화합니다.
+- 화면이 까만 동안 다음 작업들이 1프레임 내에 처리됩니다:
+  1. Map Prefab 생성
+  2. 이번 스테이지의 **MutantSpawnGroup** 내 모든 뮤턴트를 종류별로 15마리씩 `PreWarm`.
+  3. 활성화된 **FoxManager**의 여우 프리팹들을 `maxConcurrentFoxes + 1` 마리 `PreWarm`.
+  4. 장착한 **어그로 탄환(AggroAmmo)**의 폭발 및 연막 파티클 프리팹을 3발치 `PreWarm`.
+- **최소 로딩 시간 보장**: PC 환경에서 로딩이 0.1초 만에 지나가 깜빡거리는 현상을 막고 가비지 컬렉터(GC) 시간을 벌어주기 위해 `yield return new WaitForSecondsRealtime(1.5f);` 강제 대기 시간을 추가했습니다.
+
+### 몬스터 재활용 및 시체 연출 (`MutantAI.cs`, `RandomFoxAnimation.cs`)
+- **시체 침강 연출 (`SinkAndReturnRoutine`)**: 몹이 죽으면 즉시 사라지지 않고 바닥에 15초간 시체로 누워 있다가, 3초에 걸쳐 땅 밑으로 스르륵 가라앉은 뒤 풀링 매니저에 반납되도록 코루틴을 추가해 몰입감을 유지했습니다.
+- **`ResetState()`**: 풀에서 객체를 다시 꺼낼 때, `hitCount`, `isDead`, 상태 페이즈 및 NavMeshAgent의 속성들을 100% 새것처럼 초기화해 줍니다.
+
+### 뮤턴트 AI 예외 케이스 버그 픽스 (어그로탄 만료 꼬임 현상)
+- **증상**: 냅다 뛰는 러너나 탱크 뮤턴트가 어그로탄(연막)에 끌린 도중에 죽으면 쓰러지지 않고 제자리 뛰기를 하거나, 정상적으로 죽더라도 5초 뒤 연막이 끝날 때 벌떡 일어나서 다시 달리는 기괴한 현상.
+- **원인 및 해결**: 
+  1. 죽을 때 뇌에서 돌고 있던 걷기/두리번거리기 타이머를 끄지 않아 애니메이션 파라미터가 덮어씌워지는 문제 발생 → `Die()` 함수 진입 시 즉각 **`StopAllCoroutines()`**를 호출해 모든 행동을 정지.
+  2. 연막탄 마커(`AggroBulletMarker`)가 5초 뒤에 각 뮤턴트의 `OnAggroExpired()`를 무지성으로 호출해 애니메이션을 강제 복구하는 문제 발생 → 상단에 **`if (isDead || isTrueDead) return;`** 방어 코드를 추가해, 죽은 객체는 어그로 만료 신호를 완전히 무시하도록 수정.
+
+---
 **[다음에 AI를 부르실 때 사용할 프롬프트 예시]**
 `Assets 폴더 최상단에 있는 NightVisitor_ProjectGuide.md 문서를 먼저 읽고 현재 프로젝트 진행 상황과 코드 구조를 파악해 줘!`

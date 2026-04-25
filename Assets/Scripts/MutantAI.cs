@@ -159,10 +159,73 @@ public class MutantAI : MonoBehaviour
         animator = GetComponent<Animator>();
         agent = GetComponent<NavMeshAgent>();
         audioSource = GetComponent<AudioSource>(); // 자동 할당
-        
         if(agent != null) agent.speed = walkSpeed;
 
-        // 씬에서 목적지를 이름으로 자동 탐색
+        InitializeDestination();
+        ApplyStartPhase();
+    }
+
+    /// <summary>
+    /// 오브젝트 풀링을 위해 이전 상태를 새것처럼 초기화하는 함수입니다.
+    /// 스포너에서 SpawnFromPool 이후에 반드시 호출해야 합니다.
+    /// </summary>
+    public void ResetState()
+    {
+        hitCount = 0;
+        isDead = false;
+        isTrueDead = false;
+        hasAlreadyRevived = false;
+        isReacting = false;
+        isAggroLureImmune = false;
+        isChaseRunning = false;
+        hasTriggeredAttack = false;
+        isFullyAlerted = false;
+        hasScreamedFromHit = false;
+
+        if (currentReactionCoroutine != null)
+        {
+            StopCoroutine(currentReactionCoroutine);
+            currentReactionCoroutine = null;
+        }
+
+        if (phase1Coroutine != null)
+        {
+            StopCoroutine(phase1Coroutine);
+            phase1Coroutine = null;
+        }
+
+        // 콜라이더 복구
+        Collider[] colliders = GetComponentsInChildren<Collider>();
+        foreach (Collider col in colliders) { col.enabled = true; }
+
+        // 머리 뼈대 복구
+        if (headBone != null) headBone.localScale = Vector3.one;
+
+        this.enabled = true;
+
+        if (agent != null)
+        {
+            agent.enabled = true;
+            agent.isStopped = false;
+            agent.speed = walkSpeed;
+            agent.updateRotation = true;
+            agent.velocity = Vector3.zero;
+        }
+
+        if (animator != null)
+        {
+            animator.updateMode = AnimatorUpdateMode.Normal;
+            animator.speed = 1f;
+            animator.Rebind();
+            animator.Update(0f);
+        }
+
+        InitializeDestination();
+        ApplyStartPhase();
+    }
+
+    private void InitializeDestination()
+    {
         GameObject entranceObj = null;
         if (isDecoy && !string.IsNullOrEmpty(decoyDestinationName))
         {
@@ -178,7 +241,10 @@ public class MutantAI : MonoBehaviour
 
         if (entranceObj != null) villageEntrance = entranceObj.transform;
         if (invasionObj != null) villageInvasion = invasionObj.transform;
+    }
 
+    private void ApplyStartPhase()
+    {
         // 시작 시 분기 처리 (기존 걷기 루프 vs 즉시 질주)
         if (startAsRunner)
         {
@@ -194,6 +260,7 @@ public class MutantAI : MonoBehaviour
         }
         else
         {
+            currentPhase = MutantPhase.ToEntrance;
             // 시작 시 VillageEntrance를 향해 가다서다 반복
             if (villageEntrance != null)
             {
@@ -708,6 +775,9 @@ public class MutantAI : MonoBehaviour
 
     private void Die(bool explodeHead = false, bool isFinalDeath = false)
     {
+        // ★ 핵심 버그 수정: 죽는 순간 진행 중이던 모든 행동(어그로탄에 끌려감, 걷기 등)을 강제 종료!
+        StopAllCoroutines();
+
         bool wasCrawling = (currentPhase == MutantPhase.Crawling);
 
         // 죽을 때 나는 엄청난 비명 혹은 터지는 소리로 인해 주변 반경에 어그로 신호를 뿌립니다!
@@ -780,12 +850,48 @@ public class MutantAI : MonoBehaviour
             Collider[] colliders = GetComponentsInChildren<Collider>();
             foreach (Collider col in colliders) { col.enabled = false; }
             
-            this.enabled = false; // 스크립트 전원 자체 차단! 끝!
+            // ★ 풀링을 위해 시체를 15초 뒤 가라앉혀서 회수하는 코루틴 실행
+            StartCoroutine(SinkAndReturnRoutine());
         }
         else
         {
             // --- [중요] 가짜 사망인 경우에는 킬 수도 안 오르고 바닥에 쓰러진 후 일정 시간 뒤 부활 루틴! ---
             StartCoroutine(ReviveRoutine(explodeHead));
+        }
+    }
+
+    /// <summary>
+    /// 영구 사망한 시체가 15초간 유지되다가 서서히 바닥으로 가라앉은 뒤 풀링 매니저로 반환됩니다.
+    /// </summary>
+    private IEnumerator SinkAndReturnRoutine()
+    {
+        // 1. 시체 유지 시간 (유저가 쳐다보며 몰입할 수 있는 시간)
+        yield return new WaitForSeconds(15f);
+
+        // 2. 바닥으로 스르륵 가라앉기 연출 (약 3초 소요)
+        float sinkDuration = 3f;
+        float elapsed = 0f;
+        Vector3 startPos = transform.position;
+        Vector3 targetPos = startPos - new Vector3(0, 2.5f, 0); // 2.5m 아래로 꺼짐
+
+        while (elapsed < sinkDuration)
+        {
+            // 게임이 종료되면 애니메이션 중단 (시간 정지 대비)
+            if (KillCountManager.isGameEnding) yield break;
+            
+            elapsed += Time.deltaTime;
+            transform.position = Vector3.Lerp(startPos, targetPos, elapsed / sinkDuration);
+            yield return null;
+        }
+
+        // 3. 완전히 가라앉으면 풀에 반납
+        if (ObjectPoolManager.Instance != null)
+        {
+            ObjectPoolManager.Instance.ReturnToPool(gameObject);
+        }
+        else
+        {
+            Destroy(gameObject); // 풀 매니저가 없으면 안전하게 삭제
         }
     }
 
@@ -1096,6 +1202,9 @@ public class MutantAI : MonoBehaviour
     public void OnAggroExpired()
     {
         if (currentPhase != MutantPhase.AggroLured) return;
+
+        // ★ 버그 수정: 어그로탄에 끌린 채로 사망했을 경우, 만료 이벤트로 인해 벌떡 일어나는 버그 방지
+        if (isDead || isTrueDead) return;
 
         // 코루틴 정리
         if (aggroLuredCoroutine != null)

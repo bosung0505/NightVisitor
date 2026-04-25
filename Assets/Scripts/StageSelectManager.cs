@@ -103,6 +103,7 @@ public struct StageConfig2
 public class StageSelectManager : MonoBehaviour
 {
     [Header("UI Panels")]
+    public CanvasGroup loadingPanel;
     public CanvasGroup mapStagePanel;
     public CanvasGroup mapStagePanel2; // Map 2용 스테이지 패널 추가
     public CanvasGroup inGamePanel;
@@ -218,13 +219,34 @@ public class StageSelectManager : MonoBehaviour
                            int targetKillCountForMap1 = 0, bool loopSpawnWaves = false,
                            bool enableRain = false)
     {
-        // 1. 패널 페이드 (마지막에 활성화되었던 패널을 끕니다)
+        StartCoroutine(StartGameRoutine(mapPrefab, foxSpawnInterval, maxConcurrentFoxes, activeSpawnPointNames,
+                                        activeDecoyNames, ignoreSneakZone, batteryDepleteRate, camSpawn,
+                                        pLimit, yLimit, survivalTimeMinutes, isMap2, spawnGroups,
+                                        targetKillCountForMap1, loopSpawnWaves, enableRain));
+    }
+
+    private System.Collections.IEnumerator StartGameRoutine(GameObject mapPrefab, float foxSpawnInterval, int maxConcurrentFoxes,
+                           string[] activeSpawnPointNames, string[] activeDecoyNames, bool ignoreSneakZone,
+                           float batteryDepleteRate, Transform camSpawn = null, Vector2 pLimit = default, Vector2 yLimit = default,
+                           float survivalTimeMinutes = 0f, bool isMap2 = false,
+                           MutantSpawnGroup[] spawnGroups = null,
+                           int targetKillCountForMap1 = 0, bool loopSpawnWaves = false,
+                           bool enableRain = false)
+    {
+        // 0. 로딩 스크린 활성화 (즉시 화면을 가림)
+        if (loadingPanel != null)
+        {
+            loadingPanel.gameObject.SetActive(true);
+            loadingPanel.alpha = 1f;
+        }
+        // 화면을 즉각적으로 가린 후에 다음 프레임에 로딩 연산을 시작하도록 1프레임 양보합니다.
+        yield return null;
+
+        // 1. 패널 페이드 (마지막에 활성화되었던 패널을 즉시 끕니다)
         if (lastActiveStagePanel != null)
         {
-            lastActiveStagePanel.DOFade(0f, fadeDuration).SetUpdate(true).OnComplete(() =>
-            {
-                lastActiveStagePanel.gameObject.SetActive(false);
-            });
+            lastActiveStagePanel.alpha = 0f;
+            lastActiveStagePanel.gameObject.SetActive(false);
         }
         
         CanvasGroup activeInGamePanel = isMap2 ? inGamePanel2 : inGamePanel;
@@ -374,6 +396,61 @@ public class StageSelectManager : MonoBehaviour
             }
         }
 
+        // =========================================================
+        // ★ [로딩 & 최적화] 리소스 미리 굽기 (Pre-warm)
+        // =========================================================
+        if (ObjectPoolManager.Instance != null)
+        {
+            // 1. 뮤턴트 PreWarm
+            if (isMap2 && spawnGroups != null)
+            {
+                System.Collections.Generic.HashSet<GameObject> mutantPrefabsToWarm = new System.Collections.Generic.HashSet<GameObject>();
+                foreach (var group in spawnGroups)
+                {
+                    if (group.mutantPrefabs != null)
+                    {
+                        foreach (var prefab in group.mutantPrefabs)
+                        {
+                            if (prefab != null) mutantPrefabsToWarm.Add(prefab);
+                        }
+                    }
+                }
+                
+                // 종류별로 15개씩 넉넉하게 구워둠 (오브젝트 생성 스파이크 방지)
+                foreach (var prefab in mutantPrefabsToWarm)
+                {
+                    ObjectPoolManager.Instance.PreWarm(prefab, 15);
+                }
+            }
+
+            // 2. 어그로 탄환 프리팹 (무거운 파티클 등) PreWarm
+            if (InventoryManager.Instance != null)
+            {
+                ShopItemData equippedAggro = InventoryManager.Instance.GetEquippedAggroAmmoData();
+                if (equippedAggro != null)
+                {
+                    if (equippedAggro.explosionParticlePrefab != null) ObjectPoolManager.Instance.PreWarm(equippedAggro.explosionParticlePrefab, 3);
+                    if (equippedAggro.smokeParticlePrefab != null) ObjectPoolManager.Instance.PreWarm(equippedAggro.smokeParticlePrefab, 3);
+                }
+            }
+            
+            // 무거운 생성 작업이 모두 끝난 후, 물리/렌더링 반영을 위해 프레임을 한 번 넘깁니다.
+            yield return null;
+        }
+
+        // ★ 너무 컴퓨터가 빨라서 0.1초만에 로딩이 끝나는 것을 방지하기 위해 최소 1.5초간 블랙스크린을 유지합니다.
+        // 이 시간 동안 유저가 로딩 텍스트를 읽을 수 있고, 게임 엔진 내부 가비지 컬렉션(GC)이나 에셋 로딩도 안정화됩니다.
+        yield return new WaitForSecondsRealtime(1.5f);
+
+        // 로딩 패널 서서히 끄기
+        if (loadingPanel != null)
+        {
+            loadingPanel.DOFade(0f, fadeDuration).SetUpdate(true).OnComplete(() =>
+            {
+                loadingPanel.gameObject.SetActive(false);
+            });
+        }
+
         // 총기 선택창 페이드 인
         if (gunSelectPanel != null)
         {
@@ -440,7 +517,8 @@ public class StageSelectManager : MonoBehaviour
         {
             if (foxAnim != null && foxAnim.gameObject.activeInHierarchy)
             {
-                Destroy(foxAnim.gameObject);
+                if (ObjectPoolManager.Instance != null) ObjectPoolManager.Instance.ReturnToPool(foxAnim.gameObject);
+                else Destroy(foxAnim.gameObject);
             }
         }
     }
@@ -504,6 +582,12 @@ public class StageSelectManager : MonoBehaviour
         if (currentInstantiatedMap != null)
         {
             Destroy(currentInstantiatedMap);
+        }
+
+        // ★ 풀링된 오브젝트들(시체 포함)도 게임 종료 시 메모리 반환
+        if (ObjectPoolManager.Instance != null)
+        {
+            ObjectPoolManager.Instance.ClearAllPools();
         }
 
         if (Camera.main != null)

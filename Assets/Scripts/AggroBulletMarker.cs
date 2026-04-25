@@ -99,7 +99,16 @@ public class AggroBulletMarker : MonoBehaviour
         // 폭발 파티클
         if (explosionParticlePrefab != null)
         {
-            GameObject expGO = Instantiate(explosionParticlePrefab, transform.position, Quaternion.identity);
+            GameObject expGO = null;
+            if (ObjectPoolManager.Instance != null)
+            {
+                expGO = ObjectPoolManager.Instance.SpawnFromPool(explosionParticlePrefab.name, transform.position, Quaternion.identity);
+            }
+            else
+            {
+                expGO = Instantiate(explosionParticlePrefab, transform.position, Quaternion.identity);
+            }
+
             expGO.transform.localScale = Vector3.one * explosionScale;
             // ★ 핵심: Scaling Mode를 Hierarchy로 강제 설정해야 localScale이 파티클 크기에 반영됨
             foreach (ParticleSystem ps in expGO.GetComponentsInChildren<ParticleSystem>(true))
@@ -110,7 +119,9 @@ public class AggroBulletMarker : MonoBehaviour
                 ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
                 ps.Play(true);
             }
-            Destroy(expGO, 5f);
+            
+            // 5초 뒤 풀에 반납
+            StartCoroutine(ReturnParticleToPoolRoutine(expGO, 5f));
         }
         // 폭발 SFX (1회)
         if (explosionSFX != null)
@@ -127,9 +138,18 @@ public class AggroBulletMarker : MonoBehaviour
         }
 
         // ── [4단계] 연막 시작 (루프) ──────────────────────────────────────────
+        GameObject smokeGO = null;
         if (smokeParticlePrefab != null)
         {
-            GameObject smokeGO = Instantiate(smokeParticlePrefab, transform.position, Quaternion.identity, transform);
+            if (ObjectPoolManager.Instance != null)
+            {
+                smokeGO = ObjectPoolManager.Instance.SpawnFromPool(smokeParticlePrefab.name, transform.position, Quaternion.identity, transform);
+            }
+            else
+            {
+                smokeGO = Instantiate(smokeParticlePrefab, transform.position, Quaternion.identity, transform);
+            }
+
             smokeGO.transform.localScale = Vector3.one * smokeScale;
             // ★ 핵심: Scaling Mode를 Hierarchy로 강제 설정해야 localScale이 파티클 크기에 반영됨
             foreach (ParticleSystem ps in smokeGO.GetComponentsInChildren<ParticleSystem>(true))
@@ -195,8 +215,30 @@ public class AggroBulletMarker : MonoBehaviour
         }
         luredMutants.Clear();
 
-        // ── [8단계] 마커 소멸 ────────────────────────────────────────────────
+        // ── [8단계] 연막 파티클 반납 및 마커 소멸 ────────────────────────────────────────────────
+        if (smokeGO != null)
+        {
+            if (ObjectPoolManager.Instance != null) ObjectPoolManager.Instance.ReturnToPool(smokeGO);
+            else Destroy(smokeGO);
+        }
         Destroy(gameObject);
+    }
+
+    private IEnumerator ReturnParticleToPoolRoutine(GameObject particleObj, float delay)
+    {
+        float elapsed = 0f;
+        while (elapsed < delay)
+        {
+            if (KillCountManager.isGameEnding) yield break;
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        if (particleObj != null)
+        {
+            if (ObjectPoolManager.Instance != null) ObjectPoolManager.Instance.ReturnToPool(particleObj);
+            else Destroy(particleObj);
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────────

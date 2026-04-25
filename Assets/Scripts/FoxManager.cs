@@ -91,9 +91,22 @@ public class FoxManager : MonoBehaviour
         // 새로 관리할 활성화 리스트는 인스턴스화된 클론들이므로 완전히 파괴하고 지워줍니다.
         foreach (var fox in activeFoxes)
         {
-            if (fox != null) Destroy(fox);
+            if (fox != null)
+            {
+                if (ObjectPoolManager.Instance != null) ObjectPoolManager.Instance.ReturnToPool(fox);
+                else Destroy(fox);
+            }
         }
         activeFoxes.Clear();
+
+        // ★ 풀 매니저에 프리팹을 등록하고 미리 구워둠 (PreWarm)
+        if (ObjectPoolManager.Instance != null && foxPrefabs != null)
+        {
+            foreach (var prefab in foxPrefabs)
+            {
+                if (prefab != null) ObjectPoolManager.Instance.PreWarm(prefab, currentMaxConcurrentFoxes + 1);
+            }
+        }
 
         currentFoxIndex = -1; // 다음 스폰 때 0으로 됨
         stageStarted = true;
@@ -180,13 +193,24 @@ public class FoxManager : MonoBehaviour
             }
 
             // We overwrite the array index with a newly spawned fox at the calculated coordinates.
-            GameObject newlySpawnedFox = Instantiate(foxPrefabs[currentFoxIndex], spawnPos, spawnRot);
-            newlySpawnedFox.name = foxPrefabs[currentFoxIndex].name.Replace("_PrefabRef", "");
+            GameObject newlySpawnedFox = null;
+            if (ObjectPoolManager.Instance != null)
+            {
+                newlySpawnedFox = ObjectPoolManager.Instance.SpawnFromPool(foxPrefabs[currentFoxIndex].name, spawnPos, spawnRot);
+                // 이름 복구 (풀에서 나올 땐 클론 찌꺼기가 안 붙게)
+                newlySpawnedFox.name = foxPrefabs[currentFoxIndex].name.Replace("_PrefabRef", "");
+            }
+            else
+            {
+                newlySpawnedFox = Instantiate(foxPrefabs[currentFoxIndex], spawnPos, spawnRot);
+                newlySpawnedFox.name = foxPrefabs[currentFoxIndex].name.Replace("_PrefabRef", "");
+            }
             
-            // --- [신규 로직] 스폰된 여우에게 현재 스테이지의 SneakZone 무시 옵션을 전달 ---
+            // --- [신규 로직] 풀링 상태 초기화 및 옵션 전달 ---
             RandomFoxAnimation foxAnim = newlySpawnedFox.GetComponent<RandomFoxAnimation>();
             if (foxAnim != null)
             {
+                foxAnim.ResetState(); // 풀링용 상태 100% 초기화
                 foxAnim.ignoreSneakZone = currentIgnoreSneakZone;
             }
 
