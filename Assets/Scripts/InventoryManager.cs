@@ -35,16 +35,34 @@ public class InventoryManager : MonoBehaviour
 
     private InventoryItemUI currentSelectedItemUI; // 현재 정보창에 열려있는 아이템
     
-    // 현재 각 카테고리별로 장착 중인 '목록 아이템(InventoryItemUI)'들을 기억하는 변수
-    private InventoryItemUI equippedGunUI;
-    private InventoryItemUI equippedScopeUI;
-    private InventoryItemUI equippedMagUI;
-    private InventoryItemUI equippedAggroAmmoUI; // 어그로 탄 장착 추적
+    [System.Serializable]
+    public class LoadoutData
+    {
+        public InventoryItemUI equippedGunUI;
+        public InventoryItemUI equippedScopeUI;
+        public InventoryItemUI equippedMagUI;
+        public InventoryItemUI equippedAggroAmmoUI;
+    }
+
+    [Header("Loadout Settings")]
+    [Tooltip("상단 로드아웃 번호 1, 2, 3 버튼을 순서대로 연결하세요.")]
+    public Button[] loadoutButtons;
+    public Color selectedLoadoutColor = new Color(1f, 1f, 1f, 1f); // 선택됨 (기본 흰색)
+    public Color unselectedLoadoutColor = new Color(0.6f, 0.6f, 0.6f, 1f); // 선택 안됨 (회색)
+
+    private LoadoutData[] loadouts = new LoadoutData[3];
+    private int currentLoadoutIndex = 0;
 
     private void Awake()
     {
         if (Instance == null) Instance = this;
         else if (Instance != this) Destroy(gameObject);
+
+        // 로드아웃 배열 초기화
+        for (int i = 0; i < 3; i++)
+        {
+            loadouts[i] = new LoadoutData();
+        }
 
         // --- 초기화: 비어있는 상태로 시작 ---
         // Awake에서 가장 먼저 지워둬야, 이후 다른 아이템들의 Start()가 불리면서 덮어씌워질 때 지워지지 않습니다.
@@ -59,9 +77,9 @@ public class InventoryManager : MonoBehaviour
     /// </summary>
     public float GetEquippedZoomMultiplier()
     {
-        if (equippedScopeUI != null && equippedScopeUI.myItemData != null)
+        if (loadouts[currentLoadoutIndex].equippedScopeUI != null && loadouts[currentLoadoutIndex].equippedScopeUI.myItemData != null)
         {
-            return equippedScopeUI.myItemData.zoomMultiplier;
+            return loadouts[currentLoadoutIndex].equippedScopeUI.myItemData.zoomMultiplier;
         }
         return 1f;
     }
@@ -71,9 +89,9 @@ public class InventoryManager : MonoBehaviour
     /// </summary>
     public ShopItemData GetEquippedScopeData()
     {
-        if (equippedScopeUI != null)
+        if (loadouts[currentLoadoutIndex].equippedScopeUI != null)
         {
-            return equippedScopeUI.myItemData;
+            return loadouts[currentLoadoutIndex].equippedScopeUI.myItemData;
         }
         return null;
     }
@@ -83,9 +101,9 @@ public class InventoryManager : MonoBehaviour
     /// </summary>
     public ShopItemData GetEquippedGunData()
     {
-        if (equippedGunUI != null)
+        if (loadouts[currentLoadoutIndex].equippedGunUI != null)
         {
-            return equippedGunUI.myItemData;
+            return loadouts[currentLoadoutIndex].equippedGunUI.myItemData;
         }
         return null;
     }
@@ -96,7 +114,7 @@ public class InventoryManager : MonoBehaviour
     /// </summary>
     public ShopItemData GetEquippedMagData()
     {
-        if (equippedMagUI != null) return equippedMagUI.myItemData;
+        if (loadouts[currentLoadoutIndex].equippedMagUI != null) return loadouts[currentLoadoutIndex].equippedMagUI.myItemData;
         return null;
     }
 
@@ -106,7 +124,7 @@ public class InventoryManager : MonoBehaviour
     /// </summary>
     public ShopItemData GetEquippedAggroAmmoData()
     {
-        if (equippedAggroAmmoUI != null) return equippedAggroAmmoUI.myItemData;
+        if (loadouts[currentLoadoutIndex].equippedAggroAmmoUI != null) return loadouts[currentLoadoutIndex].equippedAggroAmmoUI.myItemData;
         return null;
     }
 
@@ -121,6 +139,98 @@ public class InventoryManager : MonoBehaviour
         // 장착/해제 버튼 이벤트 연결
         if (equipButton != null) equipButton.onClick.AddListener(OnEquipButtonClicked);
         if (unequipButton != null) unequipButton.onClick.AddListener(OnUnequipButtonClicked);
+
+        // 로드아웃 버튼 이벤트 연결 및 초기화
+        if (loadoutButtons != null)
+        {
+            for (int i = 0; i < loadoutButtons.Length; i++)
+            {
+                int index = i; // 클로저 이슈 방지
+                if (loadoutButtons[index] != null)
+                {
+                    loadoutButtons[index].onClick.AddListener(() => SelectLoadout(index));
+                }
+            }
+        }
+        
+        // 0번 로드아웃 기본 선택은 모든 아이템의 Start()가 끝난 뒤에 안전하게 실행하기 위해 1프레임 지연시킵니다.
+        StartCoroutine(InitFirstLoadoutDelayed());
+    }
+
+    private System.Collections.IEnumerator InitFirstLoadoutDelayed()
+    {
+        yield return null;
+        SelectLoadout(0);
+    }
+
+    /// <summary>
+    /// 외부 스크립트(GunSelectManager 등)에서 특정 로드아웃의 정보를 읽어갈 때 사용합니다.
+    /// </summary>
+    public LoadoutData GetLoadout(int index)
+    {
+        if (index < 0 || index >= 3) return null;
+        return loadouts[index];
+    }
+
+    public void SelectLoadout(int index)
+    {
+        if (index < 0 || index >= 3) return;
+        currentLoadoutIndex = index;
+
+        // 1. 버튼 색상 업데이트
+        if (loadoutButtons != null)
+        {
+            for (int i = 0; i < loadoutButtons.Length; i++)
+            {
+                if (loadoutButtons[i] != null)
+                {
+                    Image btnImage = loadoutButtons[i].GetComponent<Image>();
+                    if (btnImage != null)
+                    {
+                        btnImage.color = (i == currentLoadoutIndex) ? selectedLoadoutColor : unselectedLoadoutColor;
+                    }
+                }
+            }
+        }
+
+        // 2. 인벤토리 목록 내 모든 아이템의 "Equipped" 눈알 UI 끄기
+        DisableAllEquippedIndicators();
+
+        // 3. CurrentStatus 아이콘 시각 효과만 비우기 (실제 데이터는 날리지 않음!)
+        if (currentGunImage != null) { currentGunImage.sprite = null; currentGunImage.color = new Color(1, 1, 1, 0); }
+        if (currentScopeImage != null) { currentScopeImage.sprite = null; currentScopeImage.color = new Color(1, 1, 1, 0); }
+        if (currentMagImage != null) { currentMagImage.sprite = null; currentMagImage.color = new Color(1, 1, 1, 0); }
+        if (currentAggroAmmoImage != null) { currentAggroAmmoImage.sprite = null; currentAggroAmmoImage.color = new Color(1, 1, 1, 0); }
+
+        // 4. 선택된 로드아웃에 있는 아이템들을 다시 화면에 반영 (눈알 켜기 + CurrentStatus 아이콘 띄우기)
+        LoadoutData currentData = loadouts[currentLoadoutIndex];
+        if (currentData.equippedGunUI != null) ApplyToCurrentStatus(currentData.equippedGunUI);
+        if (currentData.equippedScopeUI != null) ApplyToCurrentStatus(currentData.equippedScopeUI);
+        if (currentData.equippedMagUI != null) ApplyToCurrentStatus(currentData.equippedMagUI);
+        if (currentData.equippedAggroAmmoUI != null) ApplyToCurrentStatus(currentData.equippedAggroAmmoUI);
+
+        // 5. 어그로 탄 버튼 갱신 (만약 비어있다면 끄고, 들어있으면 켜지도록)
+        if (InGameUIBinder.Instance != null) InGameUIBinder.Instance.RefreshAggroButton();
+
+        // 6. 우측 정보창이 열려있다면 버튼 상태(Equip/Unequip) 갱신
+        UpdateButtonStates();
+    }
+
+    private void DisableAllEquippedIndicators()
+    {
+        void DisableArray(InventoryItemUI[] arr)
+        {
+            if (arr == null) return;
+            foreach (var item in arr)
+            {
+                if (item != null && item.gameObject.activeSelf)
+                    item.SetEquippedState(false);
+            }
+        }
+        DisableArray(gunSlots);
+        DisableArray(scopeSlots);
+        DisableArray(magSlots);
+        DisableArray(aggroAmmoSlots);
     }
 
     // [추가] 시작할 때 이미 장착(Equipped)이 켜져 있는 아이템을 CurrentStatus에 등록해주는 함수
@@ -128,9 +238,19 @@ public class InventoryManager : MonoBehaviour
     {
         if (preEquippedItem == null || preEquippedItem.myItemData == null) return;
         
-        // 아이콘을 CurrentStatus 슬롯에 띄움
-        ApplyToCurrentStatus(preEquippedItem);
-        Debug.Log($"시작 시 기본 장착 적용됨: {preEquippedItem.myItemData.itemName}");
+        // 에디터에서 켜둔 기본 아이템은 1, 2, 3번 로드아웃 모두에 기본값으로 저장합니다.
+        for (int i = 0; i < 3; i++)
+        {
+            switch (preEquippedItem.myItemData.category)
+            {
+                case ItemCategory.Gun:       loadouts[i].equippedGunUI = preEquippedItem;       break;
+                case ItemCategory.Scope:     loadouts[i].equippedScopeUI = preEquippedItem;     break;
+                case ItemCategory.Mag:       loadouts[i].equippedMagUI = preEquippedItem;       break;
+                case ItemCategory.AggroAmmo: loadouts[i].equippedAggroAmmoUI = preEquippedItem; break;
+            }
+        }
+
+        Debug.Log($"시작 시 기본 장착(모든 조합) 적용됨: {preEquippedItem.myItemData.itemName}");
     }
 
     // [추가] 상점 등에서 새로운 아이템을 구매했을 때 인벤토리에 끼워넣는 함수
@@ -265,42 +385,47 @@ public class InventoryManager : MonoBehaviour
         
         switch (category)
         {
-            case ItemCategory.Gun:       existingItemUI = equippedGunUI;       break;
-            case ItemCategory.Scope:     existingItemUI = equippedScopeUI;     break;
-            case ItemCategory.Mag:       existingItemUI = equippedMagUI;       break;
-            case ItemCategory.AggroAmmo: existingItemUI = equippedAggroAmmoUI; break;
+            case ItemCategory.Gun:       existingItemUI = loadouts[currentLoadoutIndex].equippedGunUI;       break;
+            case ItemCategory.Scope:     existingItemUI = loadouts[currentLoadoutIndex].equippedScopeUI;     break;
+            case ItemCategory.Mag:       existingItemUI = loadouts[currentLoadoutIndex].equippedMagUI;       break;
+            case ItemCategory.AggroAmmo: existingItemUI = loadouts[currentLoadoutIndex].equippedAggroAmmoUI; break;
         }
 
-        // 뭔가 껴입고 있었다면 벗김
+        // 뭔가 껴입고 있었다면 벗김 (인벤토리 목록 아이콘 눈알 끄기)
         if (existingItemUI != null)
         {
             existingItemUI.SetEquippedState(false);
         }
     }
 
-    // CurrentStatus UI에 아이콘을 띄우고 "장착 중인 아이템"으로 기록해두는 함수
+    // CurrentStatus UI에 아이콘을 띄우고 "현재 로드아웃 장착 중인 아이템"으로 기록 및 눈알 켜기
     private void ApplyToCurrentStatus(InventoryItemUI targetUI)
     {
+        if (targetUI == null) return;
+        
         ShopItemData data = targetUI.myItemData;
         Image targetSlotImage = null;
 
-        // 카테고리별로 타겟 이미지 컴포넌트와 기록 변수 연결
+        // 1. 해당 슬롯의 인벤토리 목록 아이콘 '눈알' 켜주기
+        targetUI.SetEquippedState(true);
+
+        // 2. 카테고리별로 타겟 이미지 컴포넌트와 현재 로드아웃 기록 변수 연결
         switch (data.category)
         {
             case ItemCategory.Gun:
-                equippedGunUI   = targetUI;
+                loadouts[currentLoadoutIndex].equippedGunUI   = targetUI;
                 targetSlotImage = currentGunImage;
                 break;
             case ItemCategory.Scope:
-                equippedScopeUI = targetUI;
+                loadouts[currentLoadoutIndex].equippedScopeUI = targetUI;
                 targetSlotImage = currentScopeImage;
                 break;
             case ItemCategory.Mag:
-                equippedMagUI   = targetUI;
+                loadouts[currentLoadoutIndex].equippedMagUI   = targetUI;
                 targetSlotImage = currentMagImage;
                 break;
             case ItemCategory.AggroAmmo:
-                equippedAggroAmmoUI = targetUI;
+                loadouts[currentLoadoutIndex].equippedAggroAmmoUI = targetUI;
                 targetSlotImage     = currentAggroAmmoImage;
                 // 어그로 탄 장착 시 InGameUIBinder의 어그로 버튼 갱신
                 if (InGameUIBinder.Instance != null)
@@ -308,14 +433,10 @@ public class InventoryManager : MonoBehaviour
                 break;
         }
 
-        // 실제 UI 이미지 교체 및 활성화
+        // 3. 실제 UI 이미지 교체 및 활성화 (CurrentStatus 화면)
         if (targetSlotImage != null)
         {
             targetSlotImage.sprite = data.itemIcon;
-            
-            // CurrentStatus에 그려지는 아이콘 크기도 원본 비율을 따르게 함 (선택)
-            // targetSlotImage.rectTransform.sizeDelta = data.iconSize; // <- 이 부분을 제거하여 씬에 설정된 크기 유지
-            
             targetSlotImage.color = new Color(1, 1, 1, 1); // 투명도 100% (보이게)
         }
     }
@@ -328,19 +449,19 @@ public class InventoryManager : MonoBehaviour
         switch (category)
         {
             case ItemCategory.Gun:
-                equippedGunUI   = null;
+                loadouts[currentLoadoutIndex].equippedGunUI   = null;
                 targetSlotImage = currentGunImage;
                 break;
             case ItemCategory.Scope:
-                equippedScopeUI = null;
+                loadouts[currentLoadoutIndex].equippedScopeUI = null;
                 targetSlotImage = currentScopeImage;
                 break;
             case ItemCategory.Mag:
-                equippedMagUI   = null;
+                loadouts[currentLoadoutIndex].equippedMagUI   = null;
                 targetSlotImage = currentMagImage;
                 break;
             case ItemCategory.AggroAmmo:
-                equippedAggroAmmoUI = null;
+                loadouts[currentLoadoutIndex].equippedAggroAmmoUI = null;
                 targetSlotImage     = currentAggroAmmoImage;
                 // 어그로 탄 해제 시 InGameUIBinder의 버튼 숨김
                 if (InGameUIBinder.Instance != null)
@@ -360,7 +481,17 @@ public class InventoryManager : MonoBehaviour
     {
         if (currentSelectedItemUI == null) return;
 
-        bool isCurrentlyEquipped = currentSelectedItemUI.IsEquipped();
+        // 현재 켜져있는 로드아웃에 이 아이템이 장착되었는가?
+        bool isCurrentlyEquipped = false;
+        LoadoutData currentData = loadouts[currentLoadoutIndex];
+        
+        switch (currentSelectedItemUI.myItemData.category)
+        {
+            case ItemCategory.Gun:       isCurrentlyEquipped = (currentData.equippedGunUI == currentSelectedItemUI); break;
+            case ItemCategory.Scope:     isCurrentlyEquipped = (currentData.equippedScopeUI == currentSelectedItemUI); break;
+            case ItemCategory.Mag:       isCurrentlyEquipped = (currentData.equippedMagUI == currentSelectedItemUI); break;
+            case ItemCategory.AggroAmmo: isCurrentlyEquipped = (currentData.equippedAggroAmmoUI == currentSelectedItemUI); break;
+        }
 
         if (equipButton != null) equipButton.gameObject.SetActive(!isCurrentlyEquipped);
         if (unequipButton != null) unequipButton.gameObject.SetActive(isCurrentlyEquipped);

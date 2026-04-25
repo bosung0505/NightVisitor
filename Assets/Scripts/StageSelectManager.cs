@@ -364,12 +364,12 @@ public class StageSelectManager : MonoBehaviour
             ShopItemData equippedScope = InventoryManager.Instance.GetEquippedScopeData();
             if (equippedScope != null && equippedScope.fogEndDistance > 0f)
             {
-                RenderSettings.fogStartDistance = equippedScope.fogStartDistance;
+                RenderSettings.fogStartDistance = isMap2 ? equippedScope.fogStartDistance : -35f;
                 RenderSettings.fogEndDistance = equippedScope.fogEndDistance;
             }
             else
             {
-                RenderSettings.fogStartDistance = originalFogStart;
+                RenderSettings.fogStartDistance = isMap2 ? originalFogStart : -35f;
                 RenderSettings.fogEndDistance = originalFogEnd;
             }
         }

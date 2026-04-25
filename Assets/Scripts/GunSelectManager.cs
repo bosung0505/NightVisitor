@@ -10,15 +10,16 @@ public class GunSelectManager : MonoBehaviour
     [Header("Gun Select UI Elements")]
     public CanvasGroup gunSelectPanel;
 
-    [Header("Gun Buttons and Selection Images")]
+    [Header("Gun Buttons")]
     public Button gun1Button;
-    public GameObject image1;
-
     public Button gun2Button;
-    public GameObject image2;
-
     public Button gun3Button;
-    public GameObject image3;
+
+    [Header("Loadout Preview Slots")]
+    public Image previewGunImage;
+    public Image previewScopeImage;
+    public Image previewMagImage;
+    public Image previewAggroAmmoImage;
 
     [Header("Countdown Settings")]
     public TextMeshProUGUI countdownText;
@@ -93,11 +94,75 @@ public class GunSelectManager : MonoBehaviour
     {
         selectedGunIndex = gunIndex;
 
-        if (image1 != null) image1.SetActive(gunIndex == 1);
-        if (image2 != null) image2.SetActive(gunIndex == 2);
-        if (image3 != null) image3.SetActive(gunIndex == 3);
+        // 인벤토리에서 해당 로드아웃의 정보 가져오기
+        if (InventoryManager.Instance != null)
+        {
+            var loadout = InventoryManager.Instance.GetLoadout(gunIndex - 1);
+            if (loadout != null)
+            {
+                // 총
+                if (previewGunImage != null)
+                {
+                    if (loadout.equippedGunUI != null && loadout.equippedGunUI.myItemData != null)
+                    {
+                        previewGunImage.sprite = loadout.equippedGunUI.myItemData.itemIcon;
+                        previewGunImage.color = new Color(1, 1, 1, 1);
+                    }
+                    else
+                    {
+                        previewGunImage.sprite = null;
+                        previewGunImage.color = new Color(1, 1, 1, 0);
+                    }
+                }
 
-        Debug.Log("Selected Gun: " + gunIndex);
+                // 스코프
+                if (previewScopeImage != null)
+                {
+                    if (loadout.equippedScopeUI != null && loadout.equippedScopeUI.myItemData != null)
+                    {
+                        previewScopeImage.sprite = loadout.equippedScopeUI.myItemData.itemIcon;
+                        previewScopeImage.color = new Color(1, 1, 1, 1);
+                    }
+                    else
+                    {
+                        previewScopeImage.sprite = null;
+                        previewScopeImage.color = new Color(1, 1, 1, 0);
+                    }
+                }
+
+                // 탄창
+                if (previewMagImage != null)
+                {
+                    if (loadout.equippedMagUI != null && loadout.equippedMagUI.myItemData != null)
+                    {
+                        previewMagImage.sprite = loadout.equippedMagUI.myItemData.itemIcon;
+                        previewMagImage.color = new Color(1, 1, 1, 1);
+                    }
+                    else
+                    {
+                        previewMagImage.sprite = null;
+                        previewMagImage.color = new Color(1, 1, 1, 0);
+                    }
+                }
+
+                // 어그로 탄
+                if (previewAggroAmmoImage != null)
+                {
+                    if (loadout.equippedAggroAmmoUI != null && loadout.equippedAggroAmmoUI.myItemData != null)
+                    {
+                        previewAggroAmmoImage.sprite = loadout.equippedAggroAmmoUI.myItemData.itemIcon;
+                        previewAggroAmmoImage.color = new Color(1, 1, 1, 1);
+                    }
+                    else
+                    {
+                        previewAggroAmmoImage.sprite = null;
+                        previewAggroAmmoImage.color = new Color(1, 1, 1, 0);
+                    }
+                }
+            }
+        }
+
+        Debug.Log("Selected Loadout Preview: " + gunIndex);
     }
 
     private IEnumerator CountdownRoutine()
@@ -119,6 +184,12 @@ public class GunSelectManager : MonoBehaviour
 
     private void StartGameTransition()
     {
+        // ★ 게임 시작 직전, 유저가 고른 로드아웃 번호로 인벤토리를 최종 세팅합니다.
+        if (InventoryManager.Instance != null)
+        {
+            InventoryManager.Instance.SelectLoadout(selectedGunIndex - 1);
+        }
+
         if (gunSelectPanel != null)
         {
             gunSelectPanel.interactable = false;

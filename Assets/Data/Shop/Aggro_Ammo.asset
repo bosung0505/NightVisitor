@@ -12,9 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 56f36c2b39e9c0646b992a7aaaee0748, type: 3}
   m_Name: Aggro_Ammo
   m_EditorClassIdentifier: 
-  itemName: High-cap mag
+  itemName: Explosion Bullet
   category: 3
-  itemIcon: {fileID: 21300000, guid: 42522206d1bcb68469d8667a8ed2a8ac, type: 3}
+  itemIcon: {fileID: 21300000, guid: d9793a01857af814a9c8ba0aad338bb3, type: 3}
   inGameAmmoIcon: {fileID: 21300000, guid: e003f0852d3b42245a3af22fae797e19, type: 3}
   iconSize: {x: 50, y: 150}
   itemPrice: 0
