@@ -37,33 +37,13 @@ public class FoxManager : MonoBehaviour
         if (Instance == null)
         {
             Instance = this;
-            InitializeFoxPrefabs();
+            // 유저 요청 반영: 이제 foxes 배열에는 '순수 프로젝트 프리팹'만 들어오므로 
+            // 씬 오브젝트를 복사하는 복잡한 과정(InitializeFoxPrefabs)을 모두 삭제합니다!
+            foxPrefabs = foxes; 
         }
         else if (Instance != this)
         {
             Destroy(gameObject);
-        }
-    }
-
-    private void InitializeFoxPrefabs()
-    {
-        if (foxPrefabs != null) return;
-
-        // Save references to the original GameObjects to act as our pseudo-prefabs.
-        foxPrefabs = new GameObject[foxes.Length];
-        for (int i = 0; i < foxes.Length; i++)
-        {
-            if (foxes[i] != null)
-            {
-                // Instantiate a hidden copy to serve as a clean prefab for respawning
-                // We save their EXACT start position and rotation here
-                foxPrefabs[i] = Instantiate(foxes[i], foxes[i].transform.position, foxes[i].transform.rotation);
-                foxPrefabs[i].SetActive(false);
-                foxPrefabs[i].name = foxes[i].name + "_PrefabRef";
-                
-                // 첫 여우를 미리 켜지 않고, InitStage가 호출될 때까지 대기합니다.
-                foxes[i].SetActive(false);
-            }
         }
     }
 
@@ -77,17 +57,7 @@ public class FoxManager : MonoBehaviour
         
         Debug.Log($"[FoxManager] InitStage: interval={spawnInterval}, points count={(currentSpawnPoints != null ? currentSpawnPoints.Length : 0)}, maxConcurrent={currentMaxConcurrentFoxes}, ignoreSneakZone={currentIgnoreSneakZone}");
 
-        // 이전에 남아있던 여우들이 있다면 제거 (구 배열 참조)
-        // [수정] foxes 배열 원본 오브젝트들을 무조건 Destroy하면 다음 생성 때 에러가 날 수 있습니다. (원본이 파괴됨)
-        // 원본 배열은 비활성화만 유지하고 냅둡니다.
-        for (int i = 0; i < foxes.Length; i++)
-        {
-            if (foxes[i] != null)
-            {
-                foxes[i].SetActive(false); // 무조건 끄기만 함
-            }
-        }
-        
+        // 이전에 남아있던 여우들이 있다면 제거 (구 배열 참조 로직 완전 삭제 - 프리팹을 건드리지 않음)
         // 새로 관리할 활성화 리스트는 인스턴스화된 클론들이므로 완전히 파괴하고 지워줍니다.
         foreach (var fox in activeFoxes)
         {
@@ -104,7 +74,12 @@ public class FoxManager : MonoBehaviour
         {
             foreach (var prefab in foxPrefabs)
             {
-                if (prefab != null) ObjectPoolManager.Instance.PreWarm(prefab, currentMaxConcurrentFoxes + 1);
+                if (prefab != null) 
+                {
+                    // 기획하신 대로 최소 10마리를 넉넉히 생성하여 풀이 고갈되지 않도록 수정
+                    int prewarmCount = Mathf.Max(10, currentMaxConcurrentFoxes + 2);
+                    ObjectPoolManager.Instance.PreWarm(prefab, prewarmCount);
+                }
             }
         }
 
@@ -192,18 +167,18 @@ public class FoxManager : MonoBehaviour
                 currentSpawnPointIndex = (currentSpawnPointIndex + 1) % currentSpawnPoints.Length;
             }
 
-            // We overwrite the array index with a newly spawned fox at the calculated coordinates.
             GameObject newlySpawnedFox = null;
+            string poolTag = foxPrefabs[currentFoxIndex].name;
+
             if (ObjectPoolManager.Instance != null)
             {
-                newlySpawnedFox = ObjectPoolManager.Instance.SpawnFromPool(foxPrefabs[currentFoxIndex].name, spawnPos, spawnRot);
-                // 이름 복구 (풀에서 나올 땐 클론 찌꺼기가 안 붙게)
-                newlySpawnedFox.name = foxPrefabs[currentFoxIndex].name.Replace("_PrefabRef", "");
+                newlySpawnedFox = ObjectPoolManager.Instance.SpawnFromPool(poolTag, spawnPos, spawnRot);
             }
-            else
+            
+            // 풀매니저가 없거나 모종의 이유로 null을 반환했다면 원본에서 직접 복사 (안전장치)
+            if (newlySpawnedFox == null)
             {
                 newlySpawnedFox = Instantiate(foxPrefabs[currentFoxIndex], spawnPos, spawnRot);
-                newlySpawnedFox.name = foxPrefabs[currentFoxIndex].name.Replace("_PrefabRef", "");
             }
             
             // --- [신규 로직] 풀링 상태 초기화 및 옵션 전달 ---

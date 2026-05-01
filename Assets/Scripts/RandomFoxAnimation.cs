@@ -60,28 +60,32 @@ public class RandomFoxAnimation : MonoBehaviour
     private float destUpdateTimer = 0f;
     private const float DEST_UPDATE_INTERVAL = 0.2f;
 
-    void Start()
+    void Awake()
     {
         animator = GetComponent<Animator>();
         agent = GetComponent<NavMeshAgent>();
 
         if (animator == null)
             Debug.LogError("RandomFoxAnimation requires an Animator component!");
-
+            
         // 체력 초기화
         currentHealth = maxHealth;
-        
+    }
+
+    void Start()
+    {
         // Disable rotation update by agent if we want manual rotation, but letting agent handle it is usually better for NavMesh.
         // We'll let the NavMeshAgent handle both position and rotation for smooth obstacle avoidance.
-        agent.updateRotation = true;
-        agent.updatePosition = true;
+        if (agent != null)
+        {
+            agent.updateRotation = true;
+            agent.updatePosition = true;
+        }
 
         // If hunting zone center is not assigned, try to find it by name
         if (huntingZoneCenter == null)
         {
-            GameObject zone = GameObject.Find("HuntingZone");
-            if (zone != null) huntingZoneCenter = zone.transform;
-            else Debug.LogWarning("HuntingZone center is not assigned and could not be found.");
+            FindFallbackTarget();
         }
         
         if (catchChickenObj != null) catchChickenObj.SetActive(false);
@@ -106,11 +110,25 @@ public class RandomFoxAnimation : MonoBehaviour
         
         if (agent != null)
         {
+            // ★ [버그 핵심] 강제로 켜기 전에 현재 좌표에서 가장 가까운 내비메시 위로 스냅(Snap) 시킵니다.
+            // 이렇게 해야만 허공이나 바닥 아래 등 내비메시가 없는 곳에서 켜지면서 isOnNavMesh가 false가 되어 영원히 멈추는 현상을 방지합니다.
+            UnityEngine.AI.NavMeshHit hit;
+            if (UnityEngine.AI.NavMesh.SamplePosition(transform.position, out hit, 10f, UnityEngine.AI.NavMesh.AllAreas))
+            {
+                transform.position = hit.position;
+            }
+
             agent.enabled = true;
             agent.isStopped = false;
             agent.updateRotation = true;
             agent.updatePosition = true;
             agent.ResetPath();
+        }
+
+        // 초기화 시점에 타겟이 없다면 여기서 바로 찾아줍니다. (Start가 늦게 도는 것 방지)
+        if (huntingZoneCenter == null)
+        {
+            FindFallbackTarget();
         }
 
         if (animator != null)
@@ -153,7 +171,11 @@ public class RandomFoxAnimation : MonoBehaviour
         }
 
         // Make sure agent is active and running
-        if (!agent.isActiveAndEnabled || !agent.isOnNavMesh) return;
+        if (!agent.isActiveAndEnabled || !agent.isOnNavMesh) 
+        {
+            Debug.LogWarning($"[Fox Movement] 에이전트 비정상 상태! isActiveAndEnabled={agent.isActiveAndEnabled}, isOnNavMesh={agent.isOnNavMesh}");
+            return;
+        }
         
         agent.isStopped = false;
 
@@ -174,6 +196,16 @@ public class RandomFoxAnimation : MonoBehaviour
                 {
                     destUpdateTimer = 0f;
                     agent.SetDestination(GetDestinationDefault());
+                }
+
+                // 1초마다 상태 로깅 (스팸 방지)
+                if (Time.frameCount % 60 == 0)
+                {
+                    string targetName = huntingZoneCenter != null ? huntingZoneCenter.name : "NULL (타겟없음)";
+                    Vector3 targetPos = huntingZoneCenter != null ? huntingZoneCenter.position : transform.position;
+                    bool destSuccess = agent.hasPath || agent.pathPending;
+                    
+                    Debug.Log($"[Fox Status] 타겟이름: {targetName}, 타겟좌표: {targetPos}, 내비도착목표(Dest): {agent.destination}, 속도: {agent.velocity.magnitude}, isOnNavMesh: {agent.isOnNavMesh}, hasPath: {destSuccess}");
                 }
                 break;
                 
@@ -406,8 +438,52 @@ public class RandomFoxAnimation : MonoBehaviour
     private Vector3 GetDestinationDefault()
     {
         // Move towards the hunting zone center
-        if (huntingZoneCenter != null) return huntingZoneCenter.position;
-        return transform.position; // Stay still if no center
+        if (huntingZoneCenter != null) 
+        {
+            return huntingZoneCenter.position;
+        }
+        
+        // If still no center, try to find one dynamically
+        FindFallbackTarget();
+        if (huntingZoneCenter != null) 
+        {
+            return huntingZoneCenter.position;
+        }
+
+        return transform.position; // Stay still if absolutely no target
+    }
+
+    private void FindFallbackTarget()
+    {
+        if (huntingZoneCenter != null) return;
+
+        // 1. 유저가 지칭했을 수 있는 다양한 이름의 빈 오브젝트 검색
+        GameObject zone = GameObject.Find("HuntingZone");
+        if (zone == null) zone = GameObject.Find("Zone");
+        if (zone == null) zone = GameObject.Find("RunningZone");
+        if (zone == null) zone = GameObject.Find("SneakZone");
+
+        if (zone != null)
+        {
+            huntingZoneCenter = zone.transform;
+            return;
+        }
+
+        // 2. 오브젝트 이름으로 찾기 실패 시, 맵에 존재하는 닭 중 아무나 한 마리 찾아서 그쪽으로 향함
+        RandomChickenAnimation anyChicken = FindObjectOfType<RandomChickenAnimation>();
+        if (anyChicken != null)
+        {
+            // 닭이 배회하는 구역의 중심(boundaryCenter)이 있다면 그걸 타겟으로 삼음
+            if (anyChicken.boundaryCenter != null)
+            {
+                huntingZoneCenter = anyChicken.boundaryCenter;
+            }
+            else
+            {
+                // 중심이 설정 안되어 있다면 그냥 그 닭의 위치를 목표로 설정 (매번 갱신됨)
+                huntingZoneCenter = anyChicken.transform;
+            }
+        }
     }
 
     private void OnTriggerEnter(Collider other)
@@ -627,6 +703,10 @@ public class RandomFoxAnimation : MonoBehaviour
     private IEnumerator SinkAndReturnRoutine()
     {
         yield return new WaitForSeconds(15f);
+
+        // ★ [버그 핵심] 내비메시 에이전트가 켜진 채로 비활성화되면 나중에 다시 켤 때 이 죽은 위치로 강제 스냅백 됩니다.
+        // 완전히 비활성화(풀 반납) 되기 전에 에이전트를 확실히 꺼줍니다.
+        if (agent != null) agent.enabled = false;
 
         float sinkDuration = 3f;
         float elapsed = 0f;

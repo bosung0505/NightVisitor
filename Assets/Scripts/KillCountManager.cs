@@ -93,6 +93,9 @@ public class KillCountManager : MonoBehaviour
     private bool isCleared = false; // 클리어 여부 플래그
     private Coroutine hideCoroutine; // 현재 진행중인 숨김 코루틴
 
+    [HideInInspector]
+    public bool isFinalStageOfMap1 = false; // 현재 플레이 중인 스테이지가 맵1의 마지막 스테이지인지 여부
+
     /// <summary>
     /// 점프 공격/마을 침략 등 게임 종료 연출이 시작된 순간부터 true.
     /// CameraController가 이 플래그를 감지해 플레이어 입력을 즉시 차단합니다.
@@ -418,6 +421,18 @@ public class KillCountManager : MonoBehaviour
             {
                 missionFailedPanel.gameObject.SetActive(false);
             });
+        }
+
+        // 맵2 영구 해금 로직 (맵1 마지막 스테이지를 클리어한 경우)
+        if (isCleared && isFinalStageOfMap1)
+        {
+            if (PlayerPrefs.GetInt("Map2_Unlocked", 0) == 0)
+            {
+                PlayerPrefs.SetInt("Map2_Unlocked", 1);
+                PlayerPrefs.SetInt("Map2_JustUnlocked", 1);
+                PlayerPrefs.Save();
+                Debug.Log("[KillCountManager] 맵2 해금 연출 트리거 활성화 됨!");
+            }
         }
 
         // 맵으로 돌아갑니다. StageSelectManager의 인스턴스를 찾아서 복귀 로직을 수행합니다.

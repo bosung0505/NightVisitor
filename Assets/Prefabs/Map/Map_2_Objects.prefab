@@ -6891,6 +6891,7 @@ MonoBehaviour:
   screamDuration: 2
   screamClip: {fileID: 8300000, guid: f676e95c918f3964dbf6c7274819e7e8, type: 3}
   deathClip: {fileID: 8300000, guid: 983b344e461f1c24eb9fd4a066dfdec4, type: 3}
+  voicePitchMultiplier: 1
   walkStepClip: {fileID: 8300000, guid: d60142e2da368444495deaa2c3798a1b, type: 3}
   runStepClip: {fileID: 8300000, guid: 81e25e7d664211447b05b3923c90fde0, type: 3}
   crawlStepClips: []
@@ -19812,6 +19813,7 @@ MonoBehaviour:
   screamDuration: 2
   screamClip: {fileID: 8300000, guid: f676e95c918f3964dbf6c7274819e7e8, type: 3}
   deathClip: {fileID: 8300000, guid: 983b344e461f1c24eb9fd4a066dfdec4, type: 3}
+  voicePitchMultiplier: 1
   walkStepClip: {fileID: 8300000, guid: d60142e2da368444495deaa2c3798a1b, type: 3}
   runStepClip: {fileID: 8300000, guid: 81e25e7d664211447b05b3923c90fde0, type: 3}
   crawlStepClips: []
@@ -40108,7 +40110,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &7801831587347020576
 Transform:
   m_ObjectHideFlags: 0
@@ -43120,6 +43122,7 @@ MonoBehaviour:
   screamDuration: 2
   screamClip: {fileID: 8300000, guid: f676e95c918f3964dbf6c7274819e7e8, type: 3}
   deathClip: {fileID: 8300000, guid: 983b344e461f1c24eb9fd4a066dfdec4, type: 3}
+  voicePitchMultiplier: 1
   walkStepClip: {fileID: 8300000, guid: d60142e2da368444495deaa2c3798a1b, type: 3}
   runStepClip: {fileID: 8300000, guid: 81e25e7d664211447b05b3923c90fde0, type: 3}
   crawlStepClips: []

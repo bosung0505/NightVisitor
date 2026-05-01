@@ -135,12 +135,14 @@ public class StageSelectManager : MonoBehaviour
         originalFogEnd = RenderSettings.fogEndDistance;
 
         // Map 1 버튼 연결
-        foreach (StageConfig config in stageConfigs)
+        for (int i = 0; i < stageConfigs.Length; i++)
         {
+            StageConfig config = stageConfigs[i];
             if (config.playButton != null)
             {
                 StageConfig capturedConfig = config;
-                config.playButton.onClick.AddListener(() => OnPlayStageClicked(capturedConfig));
+                bool isFinal = (i == stageConfigs.Length - 1);
+                config.playButton.onClick.AddListener(() => OnPlayStageClicked(capturedConfig, isFinal));
             }
         }
 
@@ -174,7 +176,7 @@ public class StageSelectManager : MonoBehaviour
     }
 
     // Map 1 실행용
-    public void OnPlayStageClicked(StageConfig config)
+    public void OnPlayStageClicked(StageConfig config, bool isFinalStage = false)
     {
         lastActiveStagePanel = mapStagePanel; // Map 1 패널 기억
         
@@ -185,7 +187,8 @@ public class StageSelectManager : MonoBehaviour
         StartGame(config.mapPrefab, config.foxSpawnInterval, config.maxConcurrentFoxes,
                   config.activeSpawnPointNames, config.activeDecoyNames, config.ignoreSneakZone,
                   config.batteryDepleteRate, null, defaultPitch, defaultYaw, 0f, false,
-                  targetKillCountForMap1: config.targetKillCount, enableRain: config.enableRain);
+                  targetKillCountForMap1: config.targetKillCount, enableRain: config.enableRain,
+                  isFinalStageForMap1: isFinalStage);
     }
 
     // Map 2 실행용
@@ -217,12 +220,12 @@ public class StageSelectManager : MonoBehaviour
                            float survivalTimeMinutes = 0f, bool isMap2 = false,
                            MutantSpawnGroup[] spawnGroups = null,
                            int targetKillCountForMap1 = 0, bool loopSpawnWaves = false,
-                           bool enableRain = false)
+                           bool enableRain = false, bool isFinalStageForMap1 = false)
     {
         StartCoroutine(StartGameRoutine(mapPrefab, foxSpawnInterval, maxConcurrentFoxes, activeSpawnPointNames,
                                         activeDecoyNames, ignoreSneakZone, batteryDepleteRate, camSpawn,
                                         pLimit, yLimit, survivalTimeMinutes, isMap2, spawnGroups,
-                                        targetKillCountForMap1, loopSpawnWaves, enableRain));
+                                        targetKillCountForMap1, loopSpawnWaves, enableRain, isFinalStageForMap1));
     }
 
     private System.Collections.IEnumerator StartGameRoutine(GameObject mapPrefab, float foxSpawnInterval, int maxConcurrentFoxes,
@@ -231,7 +234,7 @@ public class StageSelectManager : MonoBehaviour
                            float survivalTimeMinutes = 0f, bool isMap2 = false,
                            MutantSpawnGroup[] spawnGroups = null,
                            int targetKillCountForMap1 = 0, bool loopSpawnWaves = false,
-                           bool enableRain = false)
+                           bool enableRain = false, bool isFinalStageForMap1 = false)
     {
         // 0. 로딩 스크린 활성화 (즉시 화면을 가림)
         if (loadingPanel != null)
@@ -239,6 +242,11 @@ public class StageSelectManager : MonoBehaviour
             loadingPanel.gameObject.SetActive(true);
             loadingPanel.alpha = 1f;
         }
+
+        // ★ BGM 크로스페이드: 메뉴 BGM → 인게임 BGM
+        if (BGMAudioManager.Instance != null)
+            BGMAudioManager.Instance.CrossFadeToIngame();
+
         // 화면을 즉각적으로 가린 후에 다음 프레임에 로딩 연산을 시작하도록 1프레임 양보합니다.
         yield return null;
 
@@ -321,6 +329,7 @@ public class StageSelectManager : MonoBehaviour
             {
                 // Map 2: targetKillCount 없음 — InitMission(0)으로 킬 카운트 카운터만 리셋
                 KillCountManager.Instance.InitMission(0);
+                KillCountManager.Instance.isFinalStageOfMap1 = false;
             }
             else
             {
@@ -328,6 +337,7 @@ public class StageSelectManager : MonoBehaviour
                 if (ingameTargetKillCountText != null)
                     ingameTargetKillCountText.text = targetKillCountForMap1.ToString();
                 KillCountManager.Instance.InitMission(targetKillCountForMap1);
+                KillCountManager.Instance.isFinalStageOfMap1 = isFinalStageForMap1;
             }
         }
 
@@ -606,5 +616,9 @@ public class StageSelectManager : MonoBehaviour
         Time.timeScale = 1f;
         RenderSettings.fogStartDistance = originalFogStart;
         RenderSettings.fogEndDistance = originalFogEnd;
+
+        // ★ BGM 크로스페이드: 인게임 BGM → 메뉴 BGM
+        if (BGMAudioManager.Instance != null)
+            BGMAudioManager.Instance.CrossFadeToMenu();
     }
 }

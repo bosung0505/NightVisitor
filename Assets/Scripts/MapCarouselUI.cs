@@ -14,6 +14,12 @@ public class MapCarouselUI : MonoBehaviour
     [Header("Carousel Settings")]
     public float animationDuration = 0.5f;
 
+    [Header("Map 2 Unlock UI")]
+    [Tooltip("맵2가 잠겨있을 때 보여질 자물쇠 UI (CanvasGroup 필요)")]
+    public CanvasGroup map2LockImage;
+    [Tooltip("맵2 입장 버튼 (CanvasGroup 필요)")]
+    public CanvasGroup map2EnterButton;
+
     [Tooltip("중앙 카드가 배치될 위치와 크기")]
     public Vector2 centerPosition = new Vector2(0, 0);
     public float centerScale = 1.0f;
@@ -57,6 +63,53 @@ public class MapCarouselUI : MonoBehaviour
     {
         // 1. 화살표 버튼 숨기기/보이기 갱신
         UpdateArrowButtons();
+
+        // [신규 로직] Map 2 (currentIndex == 1) 도달 시 해금 상태 확인 및 연출
+        if (currentIndex == 1)
+        {
+            int unlocked = PlayerPrefs.GetInt("Map2_Unlocked", 0);
+            int justUnlocked = PlayerPrefs.GetInt("Map2_JustUnlocked", 0);
+
+            if (justUnlocked == 1)
+            {
+                // 1회성 트리거 소모
+                PlayerPrefs.SetInt("Map2_JustUnlocked", 0);
+                PlayerPrefs.Save();
+                StartCoroutine(PlayUnlockAnimation());
+            }
+            else if (unlocked == 1)
+            {
+                // 이미 해금됨
+                if (map2LockImage != null)
+                {
+                    map2LockImage.alpha = 0f;
+                    map2LockImage.gameObject.SetActive(false);
+                }
+                if (map2EnterButton != null)
+                {
+                    map2EnterButton.gameObject.SetActive(true);
+                    map2EnterButton.alpha = 1f;
+                    map2EnterButton.interactable = true;
+                    map2EnterButton.blocksRaycasts = true;
+                }
+            }
+            else
+            {
+                // 잠김
+                if (map2LockImage != null)
+                {
+                    map2LockImage.gameObject.SetActive(true);
+                    map2LockImage.alpha = 1f;
+                }
+                if (map2EnterButton != null)
+                {
+                    map2EnterButton.alpha = 0f;
+                    map2EnterButton.interactable = false;
+                    map2EnterButton.blocksRaycasts = false;
+                    map2EnterButton.gameObject.SetActive(false);
+                }
+            }
+        }
 
         // 2. 모든 카드의 위치, 크기, 렌더링 순서(Z-index 위아래)를 재배치합니다.
         for (int i = 0; i < mapCards.Length; i++)
@@ -133,5 +186,50 @@ public class MapCarouselUI : MonoBehaviour
             // Map3 (마지막 Index) 이면 안 보이고, 그 이전이면 보임
             rightButton.gameObject.SetActive(currentIndex < mapCards.Length - 1);
         }
+    }
+
+    private System.Collections.IEnumerator PlayUnlockAnimation()
+    {
+        UnityEngine.EventSystems.EventSystem evSystem = UnityEngine.EventSystems.EventSystem.current;
+
+        // 글로벌 UI 이벤트 시스템 차단 (유저 상호작용 원천 봉쇄)
+        if (evSystem != null)
+            evSystem.enabled = false;
+
+        // 중앙으로 카드가 슬라이드 오기까지 대기
+        yield return new WaitForSeconds(animationDuration + 0.1f);
+
+        // 1단계: 자물쇠 서서히 사라짐
+        if (map2LockImage != null)
+        {
+            map2LockImage.DOFade(0f, 1f).OnComplete(() =>
+            {
+                map2LockImage.gameObject.SetActive(false);
+            });
+        }
+
+        // 2단계: 입장 버튼 서서히 나타남 (자물쇠가 반쯤 사라질 때쯤 0.5초 딜레이 후 시작)
+        if (map2EnterButton != null)
+        {
+            map2EnterButton.gameObject.SetActive(true);
+            map2EnterButton.alpha = 0f;
+            map2EnterButton.interactable = false;
+            map2EnterButton.blocksRaycasts = false;
+            
+            map2EnterButton.DOFade(1f, 1f).SetDelay(0.5f);
+        }
+
+        // 애니메이션이 완전히 끝날 때까지 대기 (딜레이 0.5초 + 페이드 1초 = 1.5초)
+        yield return new WaitForSeconds(1.5f);
+
+        if (map2EnterButton != null)
+        {
+            map2EnterButton.interactable = true;
+            map2EnterButton.blocksRaycasts = true;
+        }
+
+        // 글로벌 UI 이벤트 시스템 완벽 복구 보장
+        if (evSystem != null)
+            evSystem.enabled = true;
     }
 }

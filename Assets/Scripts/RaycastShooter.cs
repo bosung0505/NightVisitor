@@ -226,19 +226,7 @@ public class RaycastShooter : MonoBehaviour
         currentAmmo--;
         UpdateAmmoUI();
 
-        // --- [신규 추가] 방금 쏜 총알이 마지막 탄약이었을 경우 미션 실패 처리 ---
-        if (currentAmmo <= 0 && currentReloadableAmmo <= 0)
-        {
-            Debug.Log("Run out of all ammo! Mission Failed.");
-            if (Map2ResultManager.Instance != null && Map2ResultManager.Instance.isActiveAndEnabled)
-            {
-                Map2ResultManager.Instance.ShowVillageInvadedPanel("모든 탄약을 소모했습니다.");
-            }
-            else if (KillCountManager.Instance != null)
-            {
-                KillCountManager.Instance.ShowMissionFailedPanel();
-            }
-        }
+
 
         if (mainCamera == null)
         {
@@ -274,6 +262,20 @@ public class RaycastShooter : MonoBehaviour
             FireSingleRay(ray);
         }
         // ─────────────────────────────────────────────────────────────────
+
+        // --- 방금 쏜 총알이 마지막 탄약이었을 경우 미션 실패 처리 (가장 마지막에 체크) ---
+        if (currentAmmo <= 0 && currentReloadableAmmo <= 0)
+        {
+            Debug.Log("Run out of all ammo! Mission Failed.");
+            if (Map2ResultManager.Instance != null && Map2ResultManager.Instance.isActiveAndEnabled)
+            {
+                Map2ResultManager.Instance.ShowVillageInvadedPanel("모든 탄약을 소모했습니다.");
+            }
+            else if (KillCountManager.Instance != null)
+            {
+                KillCountManager.Instance.ShowMissionFailedPanel();
+            }
+        }
     }
 
     /// <summary>
@@ -295,13 +297,7 @@ public class RaycastShooter : MonoBehaviour
         currentAmmo--;
         UpdateAmmoUI();
 
-        if (currentAmmo <= 0 && currentReloadableAmmo <= 0)
-        {
-            if (Map2ResultManager.Instance != null && Map2ResultManager.Instance.isActiveAndEnabled)
-                Map2ResultManager.Instance.ShowVillageInvadedPanel("모든 탄약을 소모했습니다.");
-            else if (KillCountManager.Instance != null)
-                KillCountManager.Instance.ShowMissionFailedPanel();
-        }
+
 
         if (mainCamera == null) return;
 
@@ -329,6 +325,20 @@ public class RaycastShooter : MonoBehaviour
             FireSingleRay(ray);
         }
         // ─────────────────────────────────────────────────────────────────
+
+        // --- 방금 쏜 총알이 마지막 탄약이었을 경우 미션 실패 처리 (가장 마지막에 체크) ---
+        if (currentAmmo <= 0 && currentReloadableAmmo <= 0)
+        {
+            Debug.Log("Run out of all ammo! Mission Failed.");
+            if (Map2ResultManager.Instance != null && Map2ResultManager.Instance.isActiveAndEnabled)
+            {
+                Map2ResultManager.Instance.ShowVillageInvadedPanel("모든 탄약을 소모했습니다.");
+            }
+            else if (KillCountManager.Instance != null)
+            {
+                KillCountManager.Instance.ShowMissionFailedPanel();
+            }
+        }
     }
 
     // =========================================================================

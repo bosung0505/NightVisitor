@@ -641,9 +641,31 @@ public enum MutantPhase { ToEntrance, ToInvasion, ChasePlayer, Crawling, AggroLu
 ### 뮤턴트 AI 예외 케이스 버그 픽스 (어그로탄 만료 꼬임 현상)
 - **증상**: 냅다 뛰는 러너나 탱크 뮤턴트가 어그로탄(연막)에 끌린 도중에 죽으면 쓰러지지 않고 제자리 뛰기를 하거나, 정상적으로 죽더라도 5초 뒤 연막이 끝날 때 벌떡 일어나서 다시 달리는 기괴한 현상.
 - **원인 및 해결**: 
-  1. 죽을 때 뇌에서 돌고 있던 걷기/두리번거리기 타이머를 끄지 않아 애니메이션 파라미터가 덮어씌워지는 문제 발생 → `Die()` 함수 진입 시 즉각 **`StopAllCoroutines()`**를 호출해 모든 행동을 정지.
   2. 연막탄 마커(`AggroBulletMarker`)가 5초 뒤에 각 뮤턴트의 `OnAggroExpired()`를 무지성으로 호출해 애니메이션을 강제 복구하는 문제 발생 → 상단에 **`if (isDead || isTrueDead) return;`** 방어 코드를 추가해, 죽은 객체는 어그로 만료 신호를 완전히 무시하도록 수정.
+
+---
+
+## 41. 맵 1 여우 AI 및 시스템 고도화 안정화 (2026.04.26 추가)
+
+### 맵 1 여우 스폰 및 길찾기(NavMesh) 결함 수정 (`FoxManager.cs`, `RandomFoxAnimation.cs`)
+* **프리팹 기반 풀링 전환**: 기존에 씬(Scene)에 있던 객체들을 복사(Instantiate)하면서 발생하던 `NullReferenceException` 및 상태 꼬임 버그를 원천 차단하기 위해, 프로젝트 폴더의 완전한 프리팹(`Fox_001.prefab`)을 `FoxManager`가 로드하여 풀링하도록 구조를 갈아엎었습니다.
+* **초기화 시점 및 NavMesh 동기화**: `RandomFoxAnimation`의 초기화를 `Start`에서 `Awake`로 격상시키고, `ResetState()` 시 `NavMesh.SamplePosition`을 이용해 여우를 내비메시 위로 강제 안착(Snap)시킨 후 에이전트를 켜도록 하여 제자리걸음 현상을 없앴습니다.
+* **유연한 Fallback 타겟팅**: `HuntingZone`이라는 이름의 오브젝트가 씬에 없으면 아무것도 못하고 고장나던 로직을, **1순위:** `HuntingZone` → **2순위:** `Zone` → **3순위:** 살아있는 닭(`boundaryCenter` 또는 `transform`)을 동적으로 수색해 무조건 타겟을 찾아내는 `FindFallbackTarget()` 계층적 탐색 알고리즘으로 개선했습니다.
+
+### 마지막 총알 사격 시 미션 실패 처리 엇갈림 버그 수정 (`RaycastShooter.cs`)
+* **증상**: 마지막 1발을 명중시켜 목표 킬 수를 채웠음에도 불구하고, "총알이 떨어졌다"는 실패 판정이 클리어 판정보다 먼저 실행되어 '미션 실패' 화면이 뜨는 심각한 논리 오류.
+* **해결**: `RaycastShooter.Shoot()` 함수 내에서 `currentAmmo <= 0` 검사 블록을 **함수의 가장 마지막 줄(Raycast 타격 및 `isCleared` 상태 갱신이 완전히 끝난 직후)**로 이동시켰습니다. 이를 통해 적중 시 `AddKill()`이 클리어 플래그를 정상적으로 켠 뒤라면, 실패 패널 호출 코드가 이를 인지하고 무시하게 됩니다.
+
+### 맵 2 자물쇠 해금 연출 및 상호작용 먹통 버그 수정 (`MapCarouselUI.cs`)
+* **증상**: 맵 1의 마지막 스테이지(스테이지 10)를 클리어하여 맵 2가 해금될 때, 자물쇠가 부서지고 입장 버튼이 나오는 애니메이션 이후 화면 터치가 영구적으로 잠겨버리는 현상.
+* **원인**: 유니티의 고질적인 `EventSystem` 버그. 터치를 막기 위해 `EventSystem.current.enabled = false`를 호출하면 컴포넌트가 꺼지면서 `EventSystem.current` 자체가 `null`이 되어버리므로, 나중에 애니메이션 종료(`OnComplete`) 시점에 다시 `enabled = true`를 시도해도 무시되는 문제였습니다. 또한, 타임스케일이 정지된 상황에서 코루틴이나 트윈 콜백이 불안정했습니다.
+* **해결**: 
+  1. 끄기 직전에 활성화된 `EventSystem.current`를 지역 변수에 캐싱(`evSystem`)해 두고, 켤 때 이 변수를 참조하도록 하여 `null` 증발을 막았습니다.
+  2. `DOTween`의 `OnComplete` 의존도를 낮추고, 코루틴 내부에서 `yield return new WaitForSeconds(1.5f)` 타이머를 통해 정확히 1.5초 뒤에 무조건 터치 차단을 해제하는 안전장치를 구현했습니다.
+* **테스트 도구 지원**: 영구 저장소(`PlayerPrefs`)에 기록되는 해금 상태 때문에 테스트가 꼬이지 않도록, 유니티 상단 메뉴바에 세이브 데이터를 버튼 클릭 한 번으로 날려버릴 수 있는 `Tools -> Clear All Save Data (PlayerPrefs)` 유틸리티(`EditorUtils.cs`)를 추가했습니다.
 
 ---
 **[다음에 AI를 부르실 때 사용할 프롬프트 예시]**
 `Assets 폴더 최상단에 있는 NightVisitor_ProjectGuide.md 문서를 먼저 읽고 현재 프로젝트 진행 상황과 코드 구조를 파악해 줘!`
+ 
+ 
