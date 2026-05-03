@@ -7,7 +7,8 @@ using UnityEngine.Audio;
 ///
 /// [에디터 세팅]
 /// - 씬의 영구 오브젝트(Canvas 루트 또는 별도 Manager 오브젝트)에 부착
-/// - AudioMixer: NightVisitorMixer 에셋 연결
+/// - AudioMixer:    NightVisitorMixer 에셋 연결
+/// - SFX Mixer Group: NightVisitorMixer의 SFX 그룹 연결
 /// </summary>
 public class GameSettingsManager : MonoBehaviour
 {
@@ -17,11 +18,14 @@ public class GameSettingsManager : MonoBehaviour
     [Tooltip("NightVisitorMixer 에셋을 여기에 연결하세요.")]
     public AudioMixer audioMixer;
 
+    [Tooltip("NightVisitorMixer의 SFX 그룹.\n런타임에 생성되는 AudioSource(총소리 등)에 자동 연결됩니다.")]
+    public AudioMixerGroup sfxMixerGroup;
+
     [Header("Default Values")]
     [Range(0f, 1f)] public float defaultBGMVolume      = 1f;
     [Range(0f, 1f)] public float defaultSFXVolume      = 1f;
-    public float defaultCameraSensitivity = 5f;   // CameraController.touchPanSpeed 기본값
-    public int   defaultLanguage          = 0;    // 0 = 한국어, 1 = English
+    public float defaultCameraSensitivity = 5f;
+    public int   defaultLanguage          = 0;   // 0=한국어, 1=English
 
     // ── PlayerPrefs 키 ──
     private const string KEY_BGM  = "Setting_BGM";
@@ -30,15 +34,19 @@ public class GameSettingsManager : MonoBehaviour
     private const string KEY_CAM  = "Setting_CamSensitivity";
 
     // ── 현재 설정값 프로퍼티 (외부 읽기용) ──
-    public float BGMVolume          { get; private set; }
-    public float SFXVolume          { get; private set; }
-    public int   Language           { get; private set; }
-    public float CameraSensitivity  { get; private set; }
+    public float BGMVolume         { get; private set; }
+    public float SFXVolume         { get; private set; }
+    public int   Language          { get; private set; }
+    public float CameraSensitivity { get; private set; }
+
+    // ── 슬라이더 동기화용 이벤트 ──
+    // SettingsPanelBinder들이 구독해서 두 설정창의 슬라이더를 연동합니다.
+    public event System.Action<float> OnBGMVolumeChanged;
+    public event System.Action<float> OnSFXVolumeChanged;
 
     // ────────────────────────────────────────────────────────
     void Awake()
     {
-        // 싱글톤 설정
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
         DontDestroyOnLoad(gameObject);
@@ -47,18 +55,16 @@ public class GameSettingsManager : MonoBehaviour
     }
 
     // ────────────────────────────────────────────────────────
-    // 저장된 값 전부 불러와서 즉시 적용
-    // ────────────────────────────────────────────────────────
     public void LoadAndApplyAll()
     {
-        SetBGMVolume           (PlayerPrefs.GetFloat(KEY_BGM,  defaultBGMVolume));
-        SetSFXVolume           (PlayerPrefs.GetFloat(KEY_SFX,  defaultSFXVolume));
-        SetLanguage            (PlayerPrefs.GetInt  (KEY_LANG, defaultLanguage));
-        SetCameraSensitivity   (PlayerPrefs.GetFloat(KEY_CAM,  defaultCameraSensitivity));
+        SetBGMVolume         (PlayerPrefs.GetFloat(KEY_BGM,  defaultBGMVolume));
+        SetSFXVolume         (PlayerPrefs.GetFloat(KEY_SFX,  defaultSFXVolume));
+        SetLanguage          (PlayerPrefs.GetInt  (KEY_LANG, defaultLanguage));
+        SetCameraSensitivity (PlayerPrefs.GetFloat(KEY_CAM,  defaultCameraSensitivity));
     }
 
     // ────────────────────────────────────────────────────────
-    // BGM 볼륨 (0~1 → dB 변환 후 AudioMixer 적용)
+    // BGM 볼륨
     // ────────────────────────────────────────────────────────
     public void SetBGMVolume(float value)
     {
@@ -67,10 +73,13 @@ public class GameSettingsManager : MonoBehaviour
 
         if (audioMixer != null)
             audioMixer.SetFloat("BGMVolume", LinearTodB(BGMVolume));
+
+        // ★ 다른 설정창 슬라이더도 같은 값으로 동기화
+        OnBGMVolumeChanged?.Invoke(BGMVolume);
     }
 
     // ────────────────────────────────────────────────────────
-    // SFX 볼륨 (0~1 → dB 변환 후 AudioMixer 적용)
+    // SFX 볼륨
     // ────────────────────────────────────────────────────────
     public void SetSFXVolume(float value)
     {
@@ -79,40 +88,42 @@ public class GameSettingsManager : MonoBehaviour
 
         if (audioMixer != null)
             audioMixer.SetFloat("SFXVolume", LinearTodB(SFXVolume));
+
+        // ★ 다른 설정창 슬라이더도 같은 값으로 동기화
+        OnSFXVolumeChanged?.Invoke(SFXVolume);
     }
 
     // ────────────────────────────────────────────────────────
-    // 카메라 민감도 → CameraController.touchPanSpeed에 직접 적용
+    // 카메라 민감도
     // ────────────────────────────────────────────────────────
     public void SetCameraSensitivity(float value)
     {
         CameraSensitivity = value;
         PlayerPrefs.SetFloat(KEY_CAM, CameraSensitivity);
 
-        // Camera.main에 붙은 CameraController에 즉시 반영
-        if (Camera.main != null)
-        {
-            CameraController cam = Camera.main.GetComponent<CameraController>();
-            if (cam != null) cam.touchPanSpeed = CameraSensitivity;
-        }
+        CameraController cam = Object.FindFirstObjectByType<CameraController>();
+        if (cam != null) cam.touchPanSpeed = CameraSensitivity;
     }
 
     // ────────────────────────────────────────────────────────
-    // 언어 설정 (0=한국어, 1=English)
-    // → 추후 LocalizationManager 연동 예정
+    // 언어 설정
     // ────────────────────────────────────────────────────────
     public void SetLanguage(int index)
     {
         Language = index;
         PlayerPrefs.SetInt(KEY_LANG, Language);
-
-        // TODO: LocalizationManager.Instance?.ApplyLanguage(Language);
         Debug.Log($"[GameSettingsManager] 언어 변경: {(Language == 0 ? "한국어" : "English")}");
     }
 
     // ────────────────────────────────────────────────────────
-    // 유틸: 선형 볼륨(0~1) → 데시벨(dB) 변환
-    // 값이 0이면 -80dB(사실상 무음)으로 처리
+    // 런타임 생성 AudioSource에 SFX 믹서 그룹 연결 (RaycastShooter 등에서 호출)
+    // ────────────────────────────────────────────────────────
+    public void AssignSFXGroup(AudioSource source)
+    {
+        if (source != null && sfxMixerGroup != null)
+            source.outputAudioMixerGroup = sfxMixerGroup;
+    }
+
     // ────────────────────────────────────────────────────────
     private float LinearTodB(float linear)
     {

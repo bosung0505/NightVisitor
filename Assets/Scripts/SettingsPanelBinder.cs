@@ -14,18 +14,13 @@ using Michsky.UI.Dark;
 public class SettingsPanelBinder : MonoBehaviour
 {
     [Header("공통 볼륨 슬라이더 (메인메뉴 + 인게임)")]
-    [Tooltip("BGM 볼륨 SliderManager")]
     public SliderManager bgmSlider;
-
-    [Tooltip("SFX 볼륨 SliderManager")]
     public SliderManager sfxSlider;
 
     [Header("인게임 전용 (없으면 비워두세요)")]
-    [Tooltip("카메라 민감도 SliderManager (인게임 설정창 전용)")]
     public SliderManager sensitivitySlider;
 
     [Header("메인메뉴 전용 (없으면 비워두세요)")]
-    [Tooltip("언어 선택 HorizontalSelector (메인메뉴 설정창 전용)")]
     public HorizontalSelector languageSelector;
 
     private bool listenersRegistered = false;
@@ -39,8 +34,24 @@ public class SettingsPanelBinder : MonoBehaviour
     void OnEnable()
     {
         // 패널이 열릴 때마다 GameSettingsManager의 값으로 슬라이더 초기화
-        // (Start보다 OnEnable이 먼저 호출되므로, 첫 활성화 시에도 값이 맞게 표시됨)
         InitializeFromSettings();
+
+        // GameSettingsManager 이벤트 구독 (다른 설정창에서 값이 바뀌면 이 슬라이더도 동기화)
+        if (GameSettingsManager.Instance != null)
+        {
+            GameSettingsManager.Instance.OnBGMVolumeChanged += SyncBGMSlider;
+            GameSettingsManager.Instance.OnSFXVolumeChanged += SyncSFXSlider;
+        }
+    }
+
+    void OnDisable()
+    {
+        // 패널이 닫힐 때 이벤트 구독 해제 (메모리 누수 방지)
+        if (GameSettingsManager.Instance != null)
+        {
+            GameSettingsManager.Instance.OnBGMVolumeChanged -= SyncBGMSlider;
+            GameSettingsManager.Instance.OnSFXVolumeChanged -= SyncSFXSlider;
+        }
     }
 
     // ────────────────────────────────────────────────────────
@@ -50,8 +61,9 @@ public class SettingsPanelBinder : MonoBehaviour
     {
         if (GameSettingsManager.Instance == null) return;
 
-        // mainSlider.value = x 방식으로 설정하면
-        // SliderManager의 내부 리스너가 값 표시 텍스트도 자동 업데이트합니다.
+        // mainSlider.value = x 방식으로 설정:
+        // → SliderManager의 onValueChanged 이벤트도 발생 → 표시 텍스트(%) 자동 업데이트
+        // → 리스너(OnBGMChanged 등)는 Start()에서 등록되므로 첫 OnEnable 시에는 중복 호출 없음
         if (bgmSlider != null && bgmSlider.mainSlider != null)
             bgmSlider.mainSlider.value = GameSettingsManager.Instance.BGMVolume;
 
@@ -60,8 +72,21 @@ public class SettingsPanelBinder : MonoBehaviour
 
         if (sensitivitySlider != null && sensitivitySlider.mainSlider != null)
             sensitivitySlider.mainSlider.value = GameSettingsManager.Instance.CameraSensitivity;
+    }
 
-        // HorizontalSelector는 PlayerPrefs에서 자동으로 불러오므로 별도 처리 불필요
+    // ────────────────────────────────────────────────────────
+    // GameSettingsManager 이벤트 핸들러 — 다른 설정창이 값을 바꾸면 이쪽도 업데이트
+    // ────────────────────────────────────────────────────────
+    private void SyncBGMSlider(float value)
+    {
+        if (bgmSlider != null && bgmSlider.mainSlider != null)
+            bgmSlider.mainSlider.SetValueWithoutNotify(value);
+    }
+
+    private void SyncSFXSlider(float value)
+    {
+        if (sfxSlider != null && sfxSlider.mainSlider != null)
+            sfxSlider.mainSlider.SetValueWithoutNotify(value);
     }
 
     // ────────────────────────────────────────────────────────
@@ -88,23 +113,8 @@ public class SettingsPanelBinder : MonoBehaviour
     // ────────────────────────────────────────────────────────
     // 각 UI 요소 → GameSettingsManager 콜백
     // ────────────────────────────────────────────────────────
-    private void OnBGMChanged(float value)
-    {
-        GameSettingsManager.Instance?.SetBGMVolume(value);
-    }
-
-    private void OnSFXChanged(float value)
-    {
-        GameSettingsManager.Instance?.SetSFXVolume(value);
-    }
-
-    private void OnSensitivityChanged(float value)
-    {
-        GameSettingsManager.Instance?.SetCameraSensitivity(value);
-    }
-
-    private void OnLanguageChanged(int index)
-    {
-        GameSettingsManager.Instance?.SetLanguage(index);
-    }
+    private void OnBGMChanged(float value)      => GameSettingsManager.Instance?.SetBGMVolume(value);
+    private void OnSFXChanged(float value)      => GameSettingsManager.Instance?.SetSFXVolume(value);
+    private void OnSensitivityChanged(float v)  => GameSettingsManager.Instance?.SetCameraSensitivity(v);
+    private void OnLanguageChanged(int index)   => GameSettingsManager.Instance?.SetLanguage(index);
 }

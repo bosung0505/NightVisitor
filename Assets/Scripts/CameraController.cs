@@ -105,6 +105,12 @@ public class CameraController : MonoBehaviour
         if (cam != null) { defaultFOV = cam.fieldOfView; targetFOV = defaultFOV; }
 
         if (scopeVolume != null) { scopeVolume.weight = 0f; scopeVolume.priority = 100f; }
+
+        // ★ 저장된 카메라 민감도 자동 적용
+        if (GameSettingsManager.Instance != null)
+            touchPanSpeed = GameSettingsManager.Instance.CameraSensitivity;
+        else
+            touchPanSpeed = PlayerPrefs.GetFloat("Setting_CamSensitivity", touchPanSpeed);
     }
 
     void OnEnable() { UpdateZoomButtonVisibility(); }

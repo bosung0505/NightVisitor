@@ -507,6 +507,7 @@ public struct MutantSpawnGroup
 
 ---
 
+
 ## 31. 관통탄(Penetration) 시스템 및 블러드 파티클 버그 수정 (2026.04.15 추가)
 
 ### ShopItemData — Gun 카테고리 확장
@@ -663,6 +664,83 @@ public enum MutantPhase { ToEntrance, ToInvasion, ChasePlayer, Crawling, AggroLu
   1. 끄기 직전에 활성화된 `EventSystem.current`를 지역 변수에 캐싱(`evSystem`)해 두고, 켤 때 이 변수를 참조하도록 하여 `null` 증발을 막았습니다.
   2. `DOTween`의 `OnComplete` 의존도를 낮추고, 코루틴 내부에서 `yield return new WaitForSeconds(1.5f)` 타이머를 통해 정확히 1.5초 뒤에 무조건 터치 차단을 해제하는 안전장치를 구현했습니다.
 * **테스트 도구 지원**: 영구 저장소(`PlayerPrefs`)에 기록되는 해금 상태 때문에 테스트가 꼬이지 않도록, 유니티 상단 메뉴바에 세이브 데이터를 버튼 클릭 한 번으로 날려버릴 수 있는 `Tools -> Clear All Save Data (PlayerPrefs)` 유틸리티(`EditorUtils.cs`)를 추가했습니다.
+
+---
+**[다음에 AI를 부르실 때 사용할 프롬프트 예시]**
+`Assets 폴더 최상단에 있는 NightVisitor_ProjectGuide.md 문서를 먼저 읽고 현재 프로젝트 진행 상황과 코드 구조를 파악해 줘!`
+
+---
+
+## 42. 글로벌 설정 시스템 · 오디오 믹서 · 결과창 전환 효과 (2026.05.03 ~ 05.04 추가)
+
+### AudioMixer 통합 (`NightVisitorMixer`)
+
+* **믹서 구성**: Unity AudioMixer에 `BGM`과 `SFX` 두 서브 그룹을 만들고, 각 그룹의 Volume 파라미터를 `BGMVolume` / `SFXVolume`으로 노출하여 코드에서 `SetFloat()`로 직접 제어합니다.
+* **런타임 AudioSource SFX 연결 (`RaycastShooter.cs`)**: `Start()`에서 `AddComponent<AudioSource>()`로 생성하는 총소리·장전소리·심장박동 AudioSource는 생성 직후 `GameSettingsManager.Instance.AssignSFXGroup(audioSource)`를 호출하여 SFX 믹서 그룹에 연결합니다. (에디터 배치 오브젝트는 `SFXMixerAssigner` 에디터 유틸리티 툴로 일괄 연결)
+* **BGM 크로스페이드 (`BGMAudioManager.cs`)**: 메뉴 BGM ↔ 인게임 BGM 전환을 `Time.unscaledDeltaTime` 기반 코루틴으로 처리합니다. 로딩 화면 중 메뉴 BGM이 서서히 줄어들고 인게임 BGM이 서서히 올라오는 연출을 `StageSelectManager.StartGameRoutine()`에서 호출합니다.
+
+### 전역 설정 싱글톤 (`GameSettingsManager.cs`)
+
+* **기능**: BGM 볼륨, SFX 볼륨, 카메라 민감도(`touchPanSpeed`), 언어 설정을 `PlayerPrefs`로 영구 저장 및 즉시 적용합니다.
+* **DontDestroyOnLoad**: 씬 전환 없이 맵 프리팹만 교체하는 구조이지만, 확장성을 위해 `DontDestroyOnLoad` 적용.
+* **핵심 API**:
+
+| 메서드 | 역할 |
+|---|---|
+| `SetBGMVolume(float)` | AudioMixer BGMVolume 즉시 적용 + OnBGMVolumeChanged 이벤트 발행 |
+| `SetSFXVolume(float)` | AudioMixer SFXVolume 즉시 적용 + OnSFXVolumeChanged 이벤트 발행 |
+| `SetCameraSensitivity(float)` | FindFirstObjectByType로 CameraController.touchPanSpeed 실시간 변경 |
+| `AssignSFXGroup(AudioSource)` | 런타임 생성 AudioSource에 sfxMixerGroup 연결 |
+
+* **카메라 민감도 에디터 미반영**: 에디터 마우스 드래그는 `panSpeed`를 사용하고 모바일 터치만 `touchPanSpeed`를 사용하므로, 민감도 슬라이더 효과는 에디터에서 확인 불가. 모바일 빌드에서만 정상 반영됩니다.
+
+### 설정창 UI 바인더 (`SettingsPanelBinder.cs`)
+
+* **역할**: `SliderManager`(BGM·SFX·민감도)와 `HorizontalSelector`(언어)를 `GameSettingsManager`에 연결하는 브리지 컴포넌트. 메인메뉴 설정창과 인게임 설정창 양쪽에 동일하게 사용합니다.
+* **슬라이더 초기화 (`OnEnable`)**: 패널이 열릴 때마다 `mainSlider.value = GameSettingsManager.Instance.XXXVolume`으로 설정해 SliderManager의 표시 텍스트(%)까지 함께 갱신합니다. (`SetValueWithoutNotify`를 쓰면 텍스트가 갱신되지 않으므로 사용 금지)
+* **크로스 패널 실시간 동기화**: `OnEnable`에서 `OnBGMVolumeChanged`·`OnSFXVolumeChanged` 이벤트를 구독하고 `OnDisable`에서 해제합니다. 메인메뉴 설정창에서 BGM을 조절하면 인게임 설정창의 슬라이더도 즉시 동일한 값으로 이동합니다.
+
+### PanelDissolveTransition 오버레이 모드 (기존 스크립트 개선)
+
+* `panelToHide`와 `panelToShow` 필드를 모두 선택 사항(optional)으로 변경했습니다.
+  * `panelToHide = null` → 뒤 배경을 유지한 채 새 패널만 위에 띄움 (설정창 오버레이)
+  * `panelToShow = null` → 새 패널 없이 현재 패널만 사라짐 (닫기 버튼)
+* **버그 수정**: `panelToShow` 활성화 시 `interactable = true`, `blocksRaycasts = true`를 함께 설정합니다. 외부에서 `false`로 설정된 채 패널이 재사용될 때 클릭 불가 현상을 방지합니다.
+
+### 인게임 포기 버튼 (`GiveUpHandler.cs`)
+
+* 인게임 설정창의 "포기하기" 버튼에 부착하는 단독 컴포넌트.
+* **맵 자동 판별**: `Map2ResultManager.Instance.isActiveAndEnabled` 여부로 현재 맵을 판단합니다.
+  * **맵 2** → `Map2ResultManager.ShowVillageInvadedPanel()`
+  * **맵 1** → `KillCountManager.ShowMissionFailedPanel()`
+* 포기 즉시 설정창 CanvasGroup을 `SetActive(false)`로 닫습니다.
+
+### 결과창 전환 효과 (`UITransitionHelper.cs`)
+
+* **기획 배경**: 결과창 등장 트리거가 버튼이 아닌 코드 기반이므로 `PanelDissolveTransition`을 사용할 수 없어 전용 싱글톤을 신설했습니다.
+* **`Time.timeScale = 0` 완전 호환**: `UIDissolveEffect`가 `Time.unscaledDeltaTime`을 사용하고 대기도 `WaitForSecondsRealtime`을 사용하므로, 시간이 멈춰있어도 정상 작동합니다.
+* **두 가지 핵심 메서드**:
+
+| 메서드 | 용도 | 흐름 |
+|---|---|---|
+| `ShowWithTransition(CanvasGroup panel)` | 결과창 등장 | DissolveIn → 패널 활성화 → DissolveOut → interactable 허용 |
+| `TransitionThen(System.Action action)` | 복귀 등 코드 실행 | DissolveIn → action() → DissolveOut |
+
+* **적용 대상**:
+  * `KillCountManager`: `ShowMissionClearPanel()`, `ShowMissionFailedPanel()`, `OnBackToStageClicked()`
+  * `Map2ResultManager`: `ShowPanel()` 헬퍼 1개 수정으로 3개 패널 전체 적용, `OnReturnButtonClicked()`
+* **맵 1 복귀 시 패널 잔류 버그**: 맵 1 결과창은 Canvas에 있어 `ReturnToMap()` 후에도 남는 문제를 `TransitionThen` 콜백 안에서 `SetActive(false)` 후 복귀로 해결했습니다.
+
+### 에디터 세팅 요약
+
+| 오브젝트 | 컴포넌트 | 주요 인스펙터 연결 |
+|---|---|---|
+| 씬 영구 오브젝트 | `GameSettingsManager` | AudioMixer, SFX Mixer Group |
+| 씬 영구 오브젝트 | `BGMAudioManager` | menuBGM, inGameBGM AudioSource |
+| 씬 영구 오브젝트 | `UITransitionHelper` | Transition_Overlay의 UIDissolveEffect |
+| Settings_Panel_Main | `SettingsPanelBinder` | bgmSlider, sfxSlider, languageSelector |
+| Settings_Panel_InGame | `SettingsPanelBinder` | bgmSlider, sfxSlider, sensitivitySlider |
+| 포기하기 버튼 | `GiveUpHandler` | Settings_Panel_InGame CanvasGroup |
 
 ---
 **[다음에 AI를 부르실 때 사용할 프롬프트 예시]**

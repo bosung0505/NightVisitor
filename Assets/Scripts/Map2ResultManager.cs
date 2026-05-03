@@ -186,50 +186,59 @@ public class Map2ResultManager : MonoBehaviour
 
     private void ShowPanel(CanvasGroup targetPanel)
     {
-        // 1. 시간 정지
         Time.timeScale = 0f;
-        // 2. 뒤에서 들리는 모든 사운드 멈춤
         AudioListener.pause = true;
-        // 3. ★ 씬의 모든 MutantAI를 즉시 동결 (NavMesh 정지 + 애니메이션 정지)
-        //    JumpAttack 경로는 루프 내부에서 처리, 나머지(타이머 클리어/마을침략) 경로는 여기서 커버
-        MutantAI[] allMutants = UnityEngine.Object.FindObjectsByType<MutantAI>(UnityEngine.FindObjectsSortMode.None);
-        foreach (MutantAI m in allMutants)
-        {
-            m.StopAnimation();
-        }
 
-        if (targetPanel != null)
+        MutantAI[] allMutants = UnityEngine.Object.FindObjectsByType<MutantAI>(UnityEngine.FindObjectsSortMode.None);
+        foreach (MutantAI m in allMutants) m.StopAnimation();
+
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        if (UITransitionHelper.Instance != null)
+        {
+            UITransitionHelper.Instance.ShowWithTransition(targetPanel);
+        }
+        else if (targetPanel != null) // fallback
         {
             targetPanel.gameObject.SetActive(true);
-            
-            // DOTween으로 페이드인 애니메이션 (timeScale = 0인 상태이므로 SetUpdate(true) 필수)
-            targetPanel.DOFade(1f, panelFadeDuration).SetUpdate(true).OnComplete(() => 
+            targetPanel.DOFade(1f, panelFadeDuration).SetUpdate(true).OnComplete(() =>
             {
                 targetPanel.interactable = true;
                 targetPanel.blocksRaycasts = true;
             });
-
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
         }
     }
 
     private void OnReturnButtonClicked()
     {
-        HidePanel(survivePanel);
-        HidePanel(villageInvadedPanel);
-        HidePanel(youDiedPanel);
-
         StageSelectManager ssm = FindFirstObjectByType<StageSelectManager>();
-        if (ssm != null)
-        {
-            ssm.ReturnToMap();
-        }
 
-        // ★ ReturnToMap()이 맵(GameObject) 전체를 Destroy한 직후에 AudioListener를 재개합니다.
-        //    순서가 반대이면 pause=false 직후 1프레임 동안 멈춰있던 AudioSource들이 재생되어
-        //    소리가 한 번 '빵' 터지는 사운드 글리치가 발생합니다.
-        AudioListener.pause = false;
+        if (UITransitionHelper.Instance != null)
+        {
+            // ★ Dissolve 전환 후 복귀
+            UITransitionHelper.Instance.TransitionThen(() =>
+            {
+                HidePanel(survivePanel);
+                HidePanel(villageInvadedPanel);
+                HidePanel(youDiedPanel);
+
+                if (ssm != null) ssm.ReturnToMap();
+
+                // ReturnToMap()이 맵 Destroy 후 AudioListener 재개
+                // (순서 반대 시 사운드 글리치 발생)
+                AudioListener.pause = false;
+            });
+        }
+        else
+        {
+            // fallback
+            HidePanel(survivePanel);
+            HidePanel(villageInvadedPanel);
+            HidePanel(youDiedPanel);
+            if (ssm != null) ssm.ReturnToMap();
+            AudioListener.pause = false;
+        }
     }
 
     private void HidePanel(CanvasGroup panel)

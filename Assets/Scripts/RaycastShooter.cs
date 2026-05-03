@@ -101,15 +101,19 @@ public class RaycastShooter : MonoBehaviour
         if (audioSource == null)
         {
             audioSource = gameObject.AddComponent<AudioSource>();
-            audioSource.playOnAwake = false; // 자동 재생 방지
+            audioSource.playOnAwake = false;
         }
+        // ★ 총소리/장전소리 AudioSource → SFX 믹서 그룹 연결
+        GameSettingsManager.Instance?.AssignSFXGroup(audioSource);
 
         // 심장박동 전용 AudioSource 생성 (루프 재생용)
         heartbeatAudioSource = gameObject.AddComponent<AudioSource>();
         heartbeatAudioSource.playOnAwake = false;
         heartbeatAudioSource.loop = true;
-        heartbeatAudioSource.spatialBlend = 0f; // 2D 사운드 (UI 효과음)
+        heartbeatAudioSource.spatialBlend = 0f;
         heartbeatAudioSource.volume = 0.7f;
+        // ★ 심장박동 AudioSource → SFX 믹서 그룹 연결
+        GameSettingsManager.Instance?.AssignSFXGroup(heartbeatAudioSource);
     }
 
     void Update()

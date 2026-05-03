@@ -341,34 +341,30 @@ public class KillCountManager : MonoBehaviour
     public void ShowMissionClearPanel()
     {
         Debug.Log("[KillCountManager] ShowMissionClearPanel() Triggered!");
-        
-        // 미션 클리어 시 인게임 진행(적 움직임, 탄약, 시간 등)을 모두 정지합니다.
-        isGameEnding = true; // ★ 입력 차단 플래그
-        Time.timeScale = 0f;
 
-        // 골드 계산 및 결과창 텍스트 세팅
+        isGameEnding = true;
+        Time.timeScale = 0f;
         CalculateAndShowResults();
 
-        if (missionClearPanel != null)
+        if (UITransitionHelper.Instance != null)
+        {
+            UITransitionHelper.Instance.ShowWithTransition(missionClearPanel);
+        }
+        else if (missionClearPanel != null) // UITransitionHelper 없을 때 fallback
         {
             missionClearPanel.gameObject.SetActive(true);
-            missionClearPanel.DOFade(1f, panelFadeDuration).SetUpdate(true).OnComplete(() => 
+            missionClearPanel.DOFade(1f, panelFadeDuration).SetUpdate(true).OnComplete(() =>
             {
                 missionClearPanel.interactable = true;
                 missionClearPanel.blocksRaycasts = true;
             });
-        }
-        else
-        {
-            Debug.LogError("[KillCountManager] missionClearPanel 이 할당되지 않았습니다!");
         }
     }
 
     public void ShowMissionFailedPanel()
     {
         Debug.Log("[KillCountManager] ShowMissionFailedPanel() Triggered!");
-        
-        // 만약 이미 미션 목표를 달성한 상태라면, 자원 고갈 시 실패가 아니라 클리어로 간주합니다.
+
         if (isCleared)
         {
             Debug.Log("[KillCountManager] Target was already reached. Redirecting to Mission Clear Panel instead.");
@@ -376,52 +372,28 @@ public class KillCountManager : MonoBehaviour
             return;
         }
 
-        // 미션 실패 시 인게임 진행(적 움직임, 탄약, 시간 등)을 모두 정지합니다.
-        isGameEnding = true; // ★ 입력 차단 플래그
+        isGameEnding = true;
         Time.timeScale = 0f;
-
-        // 골드 계산 및 결과창 텍스트 세팅 (실패 시에도 집계하여 보여줌)
         CalculateAndShowResults();
 
-        if (missionFailedPanel != null)
+        if (UITransitionHelper.Instance != null)
+        {
+            UITransitionHelper.Instance.ShowWithTransition(missionFailedPanel);
+        }
+        else if (missionFailedPanel != null) // fallback
         {
             missionFailedPanel.gameObject.SetActive(true);
-            missionFailedPanel.DOFade(1f, panelFadeDuration).SetUpdate(true).OnComplete(() => 
+            missionFailedPanel.DOFade(1f, panelFadeDuration).SetUpdate(true).OnComplete(() =>
             {
                 missionFailedPanel.interactable = true;
                 missionFailedPanel.blocksRaycasts = true;
             });
         }
-        else
-        {
-            Debug.LogError("[KillCountManager] missionFailedPanel 이 할당되지 않았습니다!");
-        }
     }
 
     private void OnBackToStageClicked()
     {
-        Debug.Log("[KillCountManager] Returning to Map. Hiding Mission Clear Panel.");
-        
-        // 미션 클리어 패널을 다시 숨깁니다.
-        if (missionClearPanel != null)
-        {
-            missionClearPanel.interactable = false;
-            missionClearPanel.blocksRaycasts = false;
-            missionClearPanel.DOFade(0f, panelFadeDuration).SetUpdate(true).OnComplete(() =>
-            {
-                missionClearPanel.gameObject.SetActive(false);
-            });
-        }
-
-        if (missionFailedPanel != null)
-        {
-            missionFailedPanel.interactable = false;
-            missionFailedPanel.blocksRaycasts = false;
-            missionFailedPanel.DOFade(0f, panelFadeDuration).SetUpdate(true).OnComplete(() =>
-            {
-                missionFailedPanel.gameObject.SetActive(false);
-            });
-        }
+        Debug.Log("[KillCountManager] Returning to Map.");
 
         // 맵2 영구 해금 로직 (맵1 마지막 스테이지를 클리어한 경우)
         if (isCleared && isFinalStageOfMap1)
@@ -435,15 +407,40 @@ public class KillCountManager : MonoBehaviour
             }
         }
 
-        // 맵으로 돌아갑니다. StageSelectManager의 인스턴스를 찾아서 복귀 로직을 수행합니다.
         StageSelectManager ssm = FindFirstObjectByType<StageSelectManager>();
-        if (ssm != null)
+
+        if (UITransitionHelper.Instance != null)
         {
-            ssm.ReturnToMap();
+            // ★ Dissolve 전환 후 복귀 (timeScale = 0 상태에서도 작동)
+            UITransitionHelper.Instance.TransitionThen(() =>
+            {
+                // 화면이 가려진 순간 결과창 즉시 비활성화
+                if (missionClearPanel != null)
+                {
+                    missionClearPanel.interactable    = false;
+                    missionClearPanel.blocksRaycasts  = false;
+                    missionClearPanel.alpha           = 0f;
+                    missionClearPanel.gameObject.SetActive(false);
+                }
+                if (missionFailedPanel != null)
+                {
+                    missionFailedPanel.interactable   = false;
+                    missionFailedPanel.blocksRaycasts = false;
+                    missionFailedPanel.alpha          = 0f;
+                    missionFailedPanel.gameObject.SetActive(false);
+                }
+
+                if (ssm != null) ssm.ReturnToMap();
+                else Debug.LogError("StageSelectManager를 찾을 수 없습니다.");
+            });
         }
         else
         {
-            Debug.LogError("StageSelectManager를 찾을 수 없습니다.");
+            // fallback: 전환 없이 즉시 복귀
+            if (missionClearPanel != null)  { missionClearPanel.alpha = 0f;  missionClearPanel.gameObject.SetActive(false); }
+            if (missionFailedPanel != null) { missionFailedPanel.alpha = 0f; missionFailedPanel.gameObject.SetActive(false); }
+            if (ssm != null) ssm.ReturnToMap();
+            else Debug.LogError("StageSelectManager를 찾을 수 없습니다.");
         }
     }
 }

@@ -86,6 +86,10 @@ public class PanelDissolveTransition : MonoBehaviour
         {
             panelToShow.gameObject.SetActive(true);
             panelToShow.alpha = 1f;
+            // ★ interactable/blocksRaycasts 복구
+            // (GiveUpHandler 등 외부에서 false로 설정된 채 재사용될 때 클릭 불가 방지)
+            panelToShow.interactable    = true;
+            panelToShow.blocksRaycasts  = true;
         }
 
         // ── 3단계: 화면을 드러낸다 (location: 0 → 1) ──
