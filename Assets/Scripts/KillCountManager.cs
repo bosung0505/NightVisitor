@@ -36,29 +36,14 @@ public class KillCountManager : MonoBehaviour
     public Button failedBackToStageButton;
 
     [Header("Reward & Result UI Settings (Clear Panel)")]
-    [Tooltip("각 결과 패널 안의 'DayResult -> Coyote_eliminated -> Count' 텍스트")]
-    public TextMeshProUGUI resultFoxCountText;
-    public TextMeshProUGUI resultFoxGoldText;  // Earned_Gold 텍스트
-
-    [Tooltip("각 결과 패널 안의 'DayResult -> Dead_Chicken -> Count' 텍스트")]
-    public TextMeshProUGUI resultChickenCountText;
-    public TextMeshProUGUI resultChickenGoldText; // Earned_Gold 텍스트
-
-    [Tooltip("각 결과 패널 안의 'DayResult -> Consumed_Bullet -> Count' 텍스트")]
-    public TextMeshProUGUI resultBulletCountText;
-    public TextMeshProUGUI resultBulletGoldText;  // Earned_Gold 텍스트
-
-    [Tooltip("총 합산 보상이 표시될 텍스트 (예: Total Reward)")]
-    public TextMeshProUGUI totalRewardText;
+    public TextMeshProUGUI clearKillCountText;
+    public TextMeshProUGUI clearKillGoldText;
+    public TextMeshProUGUI clearStageRewardGoldText; // 스테이지 클리어 기본 보상
+    public TextMeshProUGUI clearTotalRewardText;
 
     [Header("Reward & Result UI Settings (Failed Panel)")]
-    [Tooltip("실패 패널 전용 텍스트들 (Clear Panel과 동일하게 연결해주세요)")]
-    public TextMeshProUGUI failFoxCountText;
-    public TextMeshProUGUI failFoxGoldText;
-    public TextMeshProUGUI failChickenCountText;
-    public TextMeshProUGUI failChickenGoldText;
-    public TextMeshProUGUI failBulletCountText;
-    public TextMeshProUGUI failBulletGoldText;
+    public TextMeshProUGUI failKillCountText;
+    public TextMeshProUGUI failKillGoldText;
     public TextMeshProUGUI failTotalRewardText;
 
     [Header("Global Money UI")]
@@ -68,10 +53,8 @@ public class KillCountManager : MonoBehaviour
     [Header("Reward Values (Per Stage)")]
     [Tooltip("여우 1마리 처치 시 획득 골드")]
     public int goldPerKill = 100;
-    [Tooltip("닭 1마리 희생 시 차감 골드")]
-    public int penaltyPerDeadChicken = 30;
-    [Tooltip("탄창 1개(5발) 소모 시 차감 골드")]
-    public int penaltyPerMagazine = 5;
+    [Tooltip("스테이지 클리어 시 기본 지급 골드")]
+    public int stageClearReward = 500;
 
     [Header("Settings")]
     [Tooltip("Kill_Info UI가 켜져 있는 시간 (초)")]
@@ -82,8 +65,6 @@ public class KillCountManager : MonoBehaviour
 
     // 현재 플레이 세션(스테이지)에서 누적 중인 수치들
     private int currentKills = 0;
-    private int deadChickens = 0;
-    private int consumedBullets = 0;
     
     private int targetKills = 0; // 이번 스테이지의 목표 킬 수
 
@@ -163,8 +144,6 @@ public class KillCountManager : MonoBehaviour
     public void InitMission(int target)
     {
         currentKills = 0;
-        deadChickens = 0;
-        consumedBullets = 0;
         
         targetKills = target;
         isCleared = false;
@@ -210,6 +189,11 @@ public class KillCountManager : MonoBehaviour
         // 이미 깼으면 추가 처리는 안해도 되거나 카운트만 계속 올려도 무방
         // 여기서는 카운트를 계속 올리게 설정
         currentKills++; 
+        
+        // 누적 킬 수 갱신 (Map 1)
+        if (PlayerStatsManager.Instance != null)
+            PlayerStatsManager.Instance.AddTotalKill(1);
+
         Debug.Log($"[KillCountManager] AddKill() called! Current kills: {currentKills} / Target: {targetKills}");
 
         // UI 텍스트 업데이트
@@ -256,62 +240,43 @@ public class KillCountManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 닭이 희생되었을 때 (여우에게 잡히거나 플레이어 오발) 호출
+    /// 보상 시스템 개편으로 닭 희생 패널티가 삭제되었습니다. (참조 에러 방지를 위해 빈 함수 유지)
     /// </summary>
-    public void AddDeadChicken()
-    {
-        deadChickens++;
-        Debug.Log($"[KillCountManager] 닭 사망! 현재 누적 죽은 닭: {deadChickens}");
-    }
+    public void AddDeadChicken() { }
 
     /// <summary>
-    /// 플레이어가 총알을 쏠 때 호출
+    /// 보상 시스템 개편으로 탄약 소모 패널티가 삭제되었습니다. (참조 에러 방지를 위해 빈 함수 유지)
     /// </summary>
-    public void AddConsumedBullet()
-    {
-        consumedBullets++;
-    }
+    public void AddConsumedBullet() { }
 
-    private void CalculateAndShowResults()
+    private void CalculateAndShowResults(bool isSuccess)
     {
+        // 맵 1 한 스테이지 최고 킬 수 갱신
+        if (PlayerStatsManager.Instance != null)
+        {
+            PlayerStatsManager.Instance.UpdateMaxKillsInStage(1, currentKills);
+        }
+
         // 1. 카운트 텍스트 갱신 (Clear & Fail)
-        if (resultFoxCountText != null) resultFoxCountText.text = currentKills.ToString();
-        if (failFoxCountText != null) failFoxCountText.text = currentKills.ToString();
+        if (clearKillCountText != null) clearKillCountText.text = currentKills.ToString();
+        if (failKillCountText != null) failKillCountText.text = currentKills.ToString();
 
-        if (resultChickenCountText != null) resultChickenCountText.text = deadChickens.ToString();
-        if (failChickenCountText != null) failChickenCountText.text = deadChickens.ToString();
-
-        if (resultBulletCountText != null) resultBulletCountText.text = consumedBullets.ToString();
-        if (failBulletCountText != null) failBulletCountText.text = consumedBullets.ToString();
-
-        // 2. 항목별 획득/차감 골드 계산
-        int foxGold = currentKills * goldPerKill;
-        int chickenPenalty = deadChickens * penaltyPerDeadChicken;
+        // 2. 항목별 보상 계산
+        int killBonus = currentKills * goldPerKill;
         
-        // 총알은 5발(1탄창)당 차감 (소수점 버림)
-        int magazinesUsed = consumedBullets / 5;
-        int bulletPenalty = magazinesUsed * penaltyPerMagazine;
+        if (clearKillGoldText != null) clearKillGoldText.text = $"+ {killBonus:N0}";
+        if (failKillGoldText != null) failKillGoldText.text = $"+ {killBonus:N0}";
 
-        // 3. UI에 개별 획득 골드를 형식에 맞게 텍스트로 표기 (예: "+ 500", "- 30")
-        if (resultFoxGoldText != null) resultFoxGoldText.text = $"+ {foxGold:N0}";
-        if (failFoxGoldText != null) failFoxGoldText.text = $"+ {foxGold:N0}";
+        if (clearStageRewardGoldText != null) clearStageRewardGoldText.text = $"+ {stageClearReward:N0}";
 
-        if (resultChickenGoldText != null) resultChickenGoldText.text = $"- {chickenPenalty:N0}";
-        if (failChickenGoldText != null) failChickenGoldText.text = $"- {chickenPenalty:N0}";
-
-        if (resultBulletGoldText != null) resultBulletGoldText.text = $"- {bulletPenalty:N0}";
-        if (failBulletGoldText != null) failBulletGoldText.text = $"- {bulletPenalty:N0}";
-
-        // 4. 총합 보상 계산
-        int totalReward = foxGold - chickenPenalty - bulletPenalty;
-        string totalRewardStr = totalReward >= 0 ? $"+ {totalReward:N0}" : $"- {Mathf.Abs(totalReward):N0}";
+        // 3. 총합 보상 계산 (성공하면 클리어 보상 추가, 실패하면 킬 보너스만)
+        int totalReward = isSuccess ? (killBonus + stageClearReward) : killBonus;
         
-        if (totalRewardText != null) totalRewardText.text = totalRewardStr;
-        if (failTotalRewardText != null) failTotalRewardText.text = totalRewardStr;
+        if (clearTotalRewardText != null) clearTotalRewardText.text = $"+ {totalReward:N0}";
+        if (failTotalRewardText != null) failTotalRewardText.text = $"+ {totalReward:N0}";
 
-        // 5. 누적 세션 보유 골드에 합산
+        // 4. 누적 세션 보유 골드에 합산
         currentSessionGold += totalReward;
-        if (currentSessionGold < 0) currentSessionGold = 0; // 보유 자산 마이너스 방지
 
         if (currentHaveGoldText != null) currentHaveGoldText.text = currentSessionGold.ToString("N0");
         
@@ -344,7 +309,7 @@ public class KillCountManager : MonoBehaviour
 
         isGameEnding = true;
         Time.timeScale = 0f;
-        CalculateAndShowResults();
+        CalculateAndShowResults(true); // 성공 (스테이지 보상 포함)
 
         if (UITransitionHelper.Instance != null)
         {
@@ -374,7 +339,7 @@ public class KillCountManager : MonoBehaviour
 
         isGameEnding = true;
         Time.timeScale = 0f;
-        CalculateAndShowResults();
+        CalculateAndShowResults(false); // 실패 (킬 보상만)
 
         if (UITransitionHelper.Instance != null)
         {

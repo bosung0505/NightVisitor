@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Audio;
@@ -29,9 +29,9 @@ namespace Michsky.UI.Dark
 
         void Start()
         {
-            if (mixer != null && masterSlider != null) { mixer.SetFloat("Master", Mathf.Log10(PlayerPrefs.GetFloat(masterSlider.sliderTag + "Slider")) * 20); }
-            if (mixer != null && musicSlider != null) { mixer.SetFloat("Music", Mathf.Log10(PlayerPrefs.GetFloat(musicSlider.sliderTag + "Slider")) * 20); }
-            if (mixer != null && sfxSlider != null) { mixer.SetFloat("SFX", Mathf.Log10(PlayerPrefs.GetFloat(sfxSlider.sliderTag + "Slider")) * 20); }
+            // if (mixer != null && masterSlider != null) { mixer.SetFloat("Master", Mathf.Log10(PlayerPrefs.GetFloat(masterSlider.sliderTag + "Slider")) * 20); }
+            // if (mixer != null && musicSlider != null) { mixer.SetFloat("Music", Mathf.Log10(PlayerPrefs.GetFloat(musicSlider.sliderTag + "Slider")) * 20); }
+            // if (mixer != null && sfxSlider != null) { mixer.SetFloat("SFX", Mathf.Log10(PlayerPrefs.GetFloat(sfxSlider.sliderTag + "Slider")) * 20); }
             if (isMobile == false)
             {
                 resolutions = Screen.resolutions;
@@ -188,9 +188,9 @@ namespace Michsky.UI.Dark
             else if (index == 1) { QualitySettings.realtimeReflectionProbes = true; }
         }
 
-        public void VolumeSetMaster(float volume) { mixer.SetFloat("Master", Mathf.Log10(volume) * 20); }
-        public void VolumeSetMusic(float volume) { mixer.SetFloat("Music", Mathf.Log10(volume) * 20); }
-        public void VolumeSetSFX(float volume) { mixer.SetFloat("SFX", Mathf.Log10(volume) * 20); }
+        public void VolumeSetMaster(float volume) { /* mixer.SetFloat("Master", Mathf.Log10(volume) * 20); */ }
+        public void VolumeSetMusic(float volume) { /* mixer.SetFloat("Music", Mathf.Log10(volume) * 20); */ }
+        public void VolumeSetSFX(float volume) { /* mixer.SetFloat("SFX", Mathf.Log10(volume) * 20); */ }
 
         public void SetOverallQuality(int qualityIndex)
         {

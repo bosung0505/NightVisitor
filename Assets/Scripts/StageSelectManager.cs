@@ -142,17 +142,20 @@ public class StageSelectManager : MonoBehaviour
             {
                 StageConfig capturedConfig = config;
                 bool isFinal = (i == stageConfigs.Length - 1);
-                config.playButton.onClick.AddListener(() => OnPlayStageClicked(capturedConfig, isFinal));
+                int stageNum = i + 1; // 1-based index
+                config.playButton.onClick.AddListener(() => OnPlayStageClicked(capturedConfig, isFinal, stageNum));
             }
         }
 
         // Map 2 버튼 연결
-        foreach (StageConfig2 config in stageConfigs2)
+        for (int i = 0; i < stageConfigs2.Length; i++)
         {
+            StageConfig2 config = stageConfigs2[i];
             if (config.playButton != null)
             {
                 StageConfig2 capturedConfig = config;
-                config.playButton.onClick.AddListener(() => OnPlayStage2Clicked(capturedConfig));
+                int stageNum = i + 1; // 1-based index
+                config.playButton.onClick.AddListener(() => OnPlayStage2Clicked(capturedConfig, stageNum));
             }
         }
 
@@ -176,9 +179,15 @@ public class StageSelectManager : MonoBehaviour
     }
 
     // Map 1 실행용
-    public void OnPlayStageClicked(StageConfig config, bool isFinalStage = false)
+    public void OnPlayStageClicked(StageConfig config, bool isFinalStage = false, int stageNum = 1)
     {
         lastActiveStagePanel = mapStagePanel; // Map 1 패널 기억
+        
+        // 최고 도달 스테이지 갱신 (Map 1)
+        if (PlayerStatsManager.Instance != null)
+        {
+            PlayerStatsManager.Instance.UpdateMaxReachedStage(1, stageNum);
+        }
         
         // Map 1은 기본 카메라 위치와 기본 제한(-70~70, -80~80)을 그대로 사용
         Vector2 defaultPitch = new Vector2(-70f, 70f);
@@ -192,9 +201,15 @@ public class StageSelectManager : MonoBehaviour
     }
 
     // Map 2 실행용
-    public void OnPlayStage2Clicked(StageConfig2 config)
+    public void OnPlayStage2Clicked(StageConfig2 config, int stageNum = 1)
     {
         lastActiveStagePanel = mapStagePanel2; // Map 2 패널 기억
+        
+        // 최고 도달 스테이지 갱신 (Map 2)
+        if (PlayerStatsManager.Instance != null)
+        {
+            PlayerStatsManager.Instance.UpdateMaxReachedStage(2, stageNum);
+        }
         
         float defaultSpawnInterval = 5f;
         int defaultMaxFoxes = 1;

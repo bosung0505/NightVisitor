@@ -11,6 +11,7 @@ using Michsky.UI.Dark;
 ///   - Min Value : 볼륨 슬라이더는 0, 민감도 슬라이더는 1
 ///   - Max Value : 볼륨 슬라이더는 1, 민감도 슬라이더는 20
 /// </summary>
+[DefaultExecutionOrder(100)]
 public class SettingsPanelBinder : MonoBehaviour
 {
     [Header("공통 볼륨 슬라이더 (메인메뉴 + 인게임)")]
@@ -23,7 +24,14 @@ public class SettingsPanelBinder : MonoBehaviour
     [Header("메인메뉴 전용 (없으면 비워두세요)")]
     public HorizontalSelector languageSelector;
 
+    [Header("일시정지 설정")]
+    [Tooltip("체크 시 설정창이 열려있는 동안 인게임 시간(뮤턴트, 타이머 등)이 정지됩니다.")]
+    public bool pauseGameWhenOpen = false;
+    [Tooltip("체크 시 설정창이 열려있는 동안 게임 내 모든 소리도 함께 일시정지됩니다.")]
+    public bool pauseAudioWhenOpen = false;
+
     private bool listenersRegistered = false;
+    private float previousTimeScale = 1f;
 
     // ────────────────────────────────────────────────────────
     void Start()
@@ -33,6 +41,18 @@ public class SettingsPanelBinder : MonoBehaviour
 
     void OnEnable()
     {
+        // 인게임 일시정지 처리
+        if (pauseGameWhenOpen)
+        {
+            if (Time.timeScale > 0f) previousTimeScale = Time.timeScale;
+            Time.timeScale = 0f;
+            
+            if (pauseAudioWhenOpen)
+            {
+                AudioListener.pause = true;
+            }
+        }
+
         // 패널이 열릴 때마다 GameSettingsManager의 값으로 슬라이더 초기화
         InitializeFromSettings();
 
@@ -46,6 +66,17 @@ public class SettingsPanelBinder : MonoBehaviour
 
     void OnDisable()
     {
+        // 인게임 일시정지 해제 (단, 게임오버/클리어 상태가 아닐 때만)
+        if (pauseGameWhenOpen && !KillCountManager.isGameEnding)
+        {
+            Time.timeScale = previousTimeScale > 0f ? previousTimeScale : 1f;
+            
+            if (pauseAudioWhenOpen)
+            {
+                AudioListener.pause = false;
+            }
+        }
+
         // 패널이 닫힐 때 이벤트 구독 해제 (메모리 누수 방지)
         if (GameSettingsManager.Instance != null)
         {

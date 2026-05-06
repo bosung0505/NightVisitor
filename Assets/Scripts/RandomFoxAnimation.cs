@@ -106,6 +106,10 @@ public class RandomFoxAnimation : MonoBehaviour
         
         if (catchChickenObj != null) catchChickenObj.SetActive(false);
         
+        // 풀링(재활용) 시 무적/먹통 버그 방지를 위해 모든 콜라이더 복구
+        Collider[] colliders = GetComponentsInChildren<Collider>();
+        foreach (Collider col in colliders) col.enabled = true;
+        
         this.enabled = true;
         
         if (agent != null)

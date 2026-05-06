@@ -99,6 +99,10 @@ public class Map2ResultManager : MonoBehaviour
     {
         currentKills++;
 
+        // 누적 킬 수 갱신 (Map 2)
+        if (PlayerStatsManager.Instance != null)
+            PlayerStatsManager.Instance.AddTotalKill(2);
+
         // 실시간 HUD 텍스트 업데이트
         if (killInfoPopText != null) killInfoPopText.text = currentKills.ToString();
         if (hudKillCountText != null) hudKillCountText.text = currentKills.ToString();
@@ -186,6 +190,12 @@ public class Map2ResultManager : MonoBehaviour
 
     private void ShowPanel(CanvasGroup targetPanel)
     {
+        // 맵 2 한 스테이지 최고 킬 수 갱신
+        if (PlayerStatsManager.Instance != null)
+        {
+            PlayerStatsManager.Instance.UpdateMaxKillsInStage(2, currentKills);
+        }
+
         Time.timeScale = 0f;
         AudioListener.pause = true;
 
