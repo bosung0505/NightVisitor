@@ -160,8 +160,6 @@ public class CameraController : MonoBehaviour
     {
         bool overUI = UnityEngine.EventSystems.EventSystem.current != null &&
                       UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject(-1);
-        Debug.Log($"[CAM] HandleInputBegan — id={id}, overUI={overUI}, touchState={touchState}");
-
         if (overUI) return;
         if (touchState != TouchState.Idle) return;
 
@@ -169,7 +167,6 @@ public class CameraController : MonoBehaviour
         touchHoldTime = 0f;
         touchState = TouchState.Holding;
         isPointerInCancelZone = false;
-        Debug.Log("[CAM] → Holding 상태 진입");
     }
 
     private void HandleInputMoved(Vector2 pos, Vector2 delta, int id)
@@ -182,14 +179,12 @@ public class CameraController : MonoBehaviour
                 // 빠르게 움직이면 드래그로 전환
                 if (delta.magnitude > Screen.width * dragSpeedThreshold)
                 {
-                    Debug.Log($"[CAM] ⚡ 드래그 판정 — delta={delta.magnitude:F1}, threshold={Screen.width * 0.01f:F1} → Dragging");
                     touchState = TouchState.Dragging;
                     ApplyPanDelta(delta); // 전환된 이번 프레임도 바로 패닝
                 }
                 break;
 
             case TouchState.Dragging:
-                Debug.Log($"[CAM] 드래그 이동 — delta={delta}, yaw={yaw:F2}, pitch={pitch:F2}");
                 ApplyPanDelta(delta);
                 break;
 
@@ -532,7 +527,5 @@ public class CameraController : MonoBehaviour
         // 4. 상태 초기화
         currentRecoilOffset = Vector3.zero;
         targetRecoilOffset = Vector3.zero;
-        
-        Debug.Log($"[CAM] Pose & Limits Reset: Pos={transform.position}, Rot={rot}, PitchRange={pLimit}, YawRange={yLimit}");
     }
 }

@@ -1911,7 +1911,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &3870771792868276009
 Transform:
@@ -3853,7 +3853,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &6786869028445478799
 Transform:
@@ -16232,7 +16232,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &6431846678673520521
 Transform:
@@ -22916,7 +22916,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &5815417825832793521
 Transform:
@@ -24553,7 +24553,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
+  m_StaticEditorFlags: 2147483647
   m_IsActive: 1
 --- !u!4 &6473731219774955154
 Transform:
@@ -27837,6 +27837,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: plant05 (59)
       objectReference: {fileID: 0}
+    - target: {fileID: 3197805144690351533, guid: 6e72189df72d33e4ca89e93cfb4d0f52, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -28431,6 +28435,10 @@ PrefabInstance:
     - target: {fileID: 1017690965390557653, guid: cc61b356120b8544685d17cf9fac93e2, type: 3}
       propertyPath: m_TagString
       value: Fence
+      objectReference: {fileID: 0}
+    - target: {fileID: 1017690965390557653, guid: cc61b356120b8544685d17cf9fac93e2, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5167573494572992879, guid: cc61b356120b8544685d17cf9fac93e2, type: 3}
       propertyPath: m_RootOrder
@@ -29340,6 +29348,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: plant05
       objectReference: {fileID: 0}
+    - target: {fileID: 3197805144690351533, guid: 6e72189df72d33e4ca89e93cfb4d0f52, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -29451,6 +29463,10 @@ PrefabInstance:
     - target: {fileID: 1017690965390557653, guid: cc61b356120b8544685d17cf9fac93e2, type: 3}
       propertyPath: m_TagString
       value: Fence
+      objectReference: {fileID: 0}
+    - target: {fileID: 1017690965390557653, guid: cc61b356120b8544685d17cf9fac93e2, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5167573494572992879, guid: cc61b356120b8544685d17cf9fac93e2, type: 3}
       propertyPath: m_RootOrder
@@ -29570,6 +29586,10 @@ PrefabInstance:
       propertyPath: m_TagString
       value: Fence
       objectReference: {fileID: 0}
+    - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -29636,6 +29656,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: plant05 (60)
       objectReference: {fileID: 0}
+    - target: {fileID: 3197805144690351533, guid: 6e72189df72d33e4ca89e93cfb4d0f52, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -29701,6 +29725,10 @@ PrefabInstance:
     - target: {fileID: 3197805144690351533, guid: 6e72189df72d33e4ca89e93cfb4d0f52, type: 3}
       propertyPath: m_Name
       value: plant05 (56)
+      objectReference: {fileID: 0}
+    - target: {fileID: 3197805144690351533, guid: 6e72189df72d33e4ca89e93cfb4d0f52, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -30584,6 +30612,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: plant05 (57)
       objectReference: {fileID: 0}
+    - target: {fileID: 3197805144690351533, guid: 6e72189df72d33e4ca89e93cfb4d0f52, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -30822,10 +30854,22 @@ PrefabInstance:
       propertyPath: m_Name
       value: greenhouse01
       objectReference: {fileID: 0}
+    - target: {fileID: 5256714777301811283, guid: e72f481cdce697649a8325f4cce0129d, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 5949001114644135882, guid: e72f481cdce697649a8325f4cce0129d, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 6049291206128607622, guid: e72f481cdce697649a8325f4cce0129d, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: d9ce3bcf235faf0479a64203edddf267, type: 2}
+    - target: {fileID: 8713356844212125076, guid: e72f481cdce697649a8325f4cce0129d, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -31250,6 +31294,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: fruitbox01 (3)
       objectReference: {fileID: 0}
+    - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5359412523502047443, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_RootOrder
       value: 53
@@ -31660,6 +31708,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: fruitbox01 (4)
       objectReference: {fileID: 0}
+    - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5359412523502047443, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_RootOrder
       value: 54
@@ -31871,6 +31923,10 @@ PrefabInstance:
     - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
       propertyPath: m_TagString
       value: Fence
+      objectReference: {fileID: 0}
+    - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -32094,6 +32150,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: plant05 (58)
       objectReference: {fileID: 0}
+    - target: {fileID: 3197805144690351533, guid: 6e72189df72d33e4ca89e93cfb4d0f52, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -32249,6 +32309,10 @@ PrefabInstance:
     - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
       propertyPath: m_TagString
       value: Fence
+      objectReference: {fileID: 0}
+    - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -33160,6 +33224,10 @@ PrefabInstance:
       propertyPath: m_StaticEditorFlags
       value: 2147483647
       objectReference: {fileID: 0}
+    - target: {fileID: 1673580857141204652, guid: d6bd76c03f8064c4cb41796cdb23ed7d, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 180c797a75b667a418035bcfd9d1e1ba, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -34766,7 +34834,39 @@ PrefabInstance:
     - target: {fileID: 3134822425390004957, guid: 255dd83f89b17d54ebcc303f099445c1, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: e1b1c1e79d31a2a4895970b0a2c23d27, type: 2}
+      objectReference: {fileID: 2100000, guid: 180c797a75b667a418035bcfd9d1e1ba, type: 2}
+    - target: {fileID: 3134822425390004957, guid: 255dd83f89b17d54ebcc303f099445c1, type: 3}
+      propertyPath: 'm_Materials.Array.data[1]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 180c797a75b667a418035bcfd9d1e1ba, type: 2}
+    - target: {fileID: 3134822425390004957, guid: 255dd83f89b17d54ebcc303f099445c1, type: 3}
+      propertyPath: 'm_Materials.Array.data[2]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 180c797a75b667a418035bcfd9d1e1ba, type: 2}
+    - target: {fileID: 3134822425390004957, guid: 255dd83f89b17d54ebcc303f099445c1, type: 3}
+      propertyPath: 'm_Materials.Array.data[3]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 180c797a75b667a418035bcfd9d1e1ba, type: 2}
+    - target: {fileID: 3134822425390004957, guid: 255dd83f89b17d54ebcc303f099445c1, type: 3}
+      propertyPath: 'm_Materials.Array.data[4]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 180c797a75b667a418035bcfd9d1e1ba, type: 2}
+    - target: {fileID: 3134822425390004957, guid: 255dd83f89b17d54ebcc303f099445c1, type: 3}
+      propertyPath: 'm_Materials.Array.data[7]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 180c797a75b667a418035bcfd9d1e1ba, type: 2}
+    - target: {fileID: 3134822425390004957, guid: 255dd83f89b17d54ebcc303f099445c1, type: 3}
+      propertyPath: 'm_Materials.Array.data[10]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 180c797a75b667a418035bcfd9d1e1ba, type: 2}
+    - target: {fileID: 3134822425390004957, guid: 255dd83f89b17d54ebcc303f099445c1, type: 3}
+      propertyPath: 'm_Materials.Array.data[11]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 180c797a75b667a418035bcfd9d1e1ba, type: 2}
+    - target: {fileID: 3134822425390004957, guid: 255dd83f89b17d54ebcc303f099445c1, type: 3}
+      propertyPath: 'm_Materials.Array.data[17]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 180c797a75b667a418035bcfd9d1e1ba, type: 2}
     - target: {fileID: 3254920721426662214, guid: 255dd83f89b17d54ebcc303f099445c1, type: 3}
       propertyPath: m_LocalRotation.w
       value: 0.9938493
@@ -34958,6 +35058,10 @@ PrefabInstance:
     - target: {fileID: 3197805144690351533, guid: 6e72189df72d33e4ca89e93cfb4d0f52, type: 3}
       propertyPath: m_Name
       value: plant05 (62)
+      objectReference: {fileID: 0}
+    - target: {fileID: 3197805144690351533, guid: 6e72189df72d33e4ca89e93cfb4d0f52, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -35152,6 +35256,10 @@ PrefabInstance:
     - target: {fileID: 1017690965390557653, guid: cc61b356120b8544685d17cf9fac93e2, type: 3}
       propertyPath: m_TagString
       value: Fence
+      objectReference: {fileID: 0}
+    - target: {fileID: 1017690965390557653, guid: cc61b356120b8544685d17cf9fac93e2, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5167573494572992879, guid: cc61b356120b8544685d17cf9fac93e2, type: 3}
       propertyPath: m_RootOrder
@@ -37722,6 +37830,10 @@ PrefabInstance:
       propertyPath: m_TagString
       value: Fence
       objectReference: {fileID: 0}
+    - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -38712,6 +38824,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: fruitbox01 (4)
       objectReference: {fileID: 0}
+    - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5359412523502047443, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_RootOrder
       value: 54
@@ -38833,6 +38949,10 @@ PrefabInstance:
     - target: {fileID: 3197805144690351533, guid: 6e72189df72d33e4ca89e93cfb4d0f52, type: 3}
       propertyPath: m_Name
       value: plant05
+      objectReference: {fileID: 0}
+    - target: {fileID: 3197805144690351533, guid: 6e72189df72d33e4ca89e93cfb4d0f52, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -39626,6 +39746,10 @@ PrefabInstance:
       propertyPath: m_TagString
       value: Fence
       objectReference: {fileID: 0}
+    - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -39930,6 +40054,10 @@ PrefabInstance:
       propertyPath: m_TagString
       value: Fence
       objectReference: {fileID: 0}
+    - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -40081,6 +40209,14 @@ PrefabInstance:
     - target: {fileID: 6348758848486759380, guid: f95eb70da356b3c4a9ee4fa42e077d8a, type: 3}
       propertyPath: m_Name
       value: windrose (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 6348758848486759380, guid: f95eb70da356b3c4a9ee4fa42e077d8a, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 9173082216740041528, guid: f95eb70da356b3c4a9ee4fa42e077d8a, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -40389,6 +40525,10 @@ PrefabInstance:
     - target: {fileID: 3197805144690351533, guid: 6e72189df72d33e4ca89e93cfb4d0f52, type: 3}
       propertyPath: m_Name
       value: plant05 (55)
+      objectReference: {fileID: 0}
+    - target: {fileID: 3197805144690351533, guid: 6e72189df72d33e4ca89e93cfb4d0f52, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -41239,6 +41379,10 @@ PrefabInstance:
     - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
       propertyPath: m_TagString
       value: Fence
+      objectReference: {fileID: 0}
+    - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -42832,6 +42976,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: plant05
       objectReference: {fileID: 0}
+    - target: {fileID: 3197805144690351533, guid: 6e72189df72d33e4ca89e93cfb4d0f52, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -43754,6 +43902,10 @@ PrefabInstance:
       propertyPath: m_TagString
       value: Fence
       objectReference: {fileID: 0}
+    - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -44328,6 +44480,10 @@ PrefabInstance:
       propertyPath: m_TagString
       value: Fence
       objectReference: {fileID: 0}
+    - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -44628,6 +44784,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: fruitbox01 (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5359412523502047443, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_RootOrder
       value: 1
@@ -44917,6 +45077,10 @@ PrefabInstance:
     - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
       propertyPath: m_TagString
       value: Fence
+      objectReference: {fileID: 0}
+    - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -46381,10 +46545,22 @@ PrefabInstance:
       propertyPath: m_Name
       value: greenhouse01
       objectReference: {fileID: 0}
+    - target: {fileID: 5256714777301811283, guid: e72f481cdce697649a8325f4cce0129d, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 5949001114644135882, guid: e72f481cdce697649a8325f4cce0129d, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 6049291206128607622, guid: e72f481cdce697649a8325f4cce0129d, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: d9ce3bcf235faf0479a64203edddf267, type: 2}
+    - target: {fileID: 8713356844212125076, guid: e72f481cdce697649a8325f4cce0129d, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -46746,6 +46922,10 @@ PrefabInstance:
     - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_Name
       value: fruitbox01 (4)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5359412523502047443, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_RootOrder
@@ -47254,6 +47434,10 @@ PrefabInstance:
     - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
       propertyPath: m_TagString
       value: Fence
+      objectReference: {fileID: 0}
+    - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -48139,6 +48323,10 @@ PrefabInstance:
     - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_Name
       value: fruitbox01 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5359412523502047443, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_RootOrder
@@ -50241,6 +50429,10 @@ PrefabInstance:
       propertyPath: m_TagString
       value: Fence
       objectReference: {fileID: 0}
+    - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -50646,6 +50838,10 @@ PrefabInstance:
     - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
       propertyPath: m_TagString
       value: Fence
+      objectReference: {fileID: 0}
+    - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -51582,6 +51778,10 @@ PrefabInstance:
     - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_Name
       value: fruitbox01 (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5359412523502047443, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_RootOrder
@@ -52791,10 +52991,22 @@ PrefabInstance:
       propertyPath: m_Name
       value: greenhouse01
       objectReference: {fileID: 0}
+    - target: {fileID: 5256714777301811283, guid: e72f481cdce697649a8325f4cce0129d, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 5949001114644135882, guid: e72f481cdce697649a8325f4cce0129d, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 6049291206128607622, guid: e72f481cdce697649a8325f4cce0129d, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: d9ce3bcf235faf0479a64203edddf267, type: 2}
+    - target: {fileID: 8713356844212125076, guid: e72f481cdce697649a8325f4cce0129d, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -52984,6 +53196,10 @@ PrefabInstance:
     - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_Name
       value: fruitbox01 (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5359412523502047443, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_RootOrder
@@ -53368,6 +53584,14 @@ PrefabInstance:
     - target: {fileID: 6348758848486759380, guid: f95eb70da356b3c4a9ee4fa42e077d8a, type: 3}
       propertyPath: m_Name
       value: windrose (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 6348758848486759380, guid: f95eb70da356b3c4a9ee4fa42e077d8a, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 9173082216740041528, guid: f95eb70da356b3c4a9ee4fa42e077d8a, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -54948,6 +55172,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: fruitbox01 (3)
       objectReference: {fileID: 0}
+    - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5359412523502047443, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_RootOrder
       value: 53
@@ -55229,6 +55457,10 @@ PrefabInstance:
     - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
       propertyPath: m_TagString
       value: Fence
+      objectReference: {fileID: 0}
+    - target: {fileID: 4168996853793008058, guid: f599028c6de4c154499278c30547ec2f, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -55912,6 +56144,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: fruitbox01 (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     - target: {fileID: 5359412523502047443, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_RootOrder
       value: 1
@@ -56378,6 +56614,14 @@ PrefabInstance:
       propertyPath: m_Name
       value: windrose (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 6348758848486759380, guid: f95eb70da356b3c4a9ee4fa42e077d8a, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 9173082216740041528, guid: f95eb70da356b3c4a9ee4fa42e077d8a, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -56399,6 +56643,10 @@ PrefabInstance:
     - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_Name
       value: fruitbox01 (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5359412523502047443, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_RootOrder
@@ -56522,6 +56770,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: plant05 (61)
       objectReference: {fileID: 0}
+    - target: {fileID: 3197805144690351533, guid: 6e72189df72d33e4ca89e93cfb4d0f52, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -56543,6 +56795,10 @@ PrefabInstance:
     - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_Name
       value: fruitbox01 (3)
+      objectReference: {fileID: 0}
+    - target: {fileID: 4696029452024334953, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5359412523502047443, guid: 231d90ad2e1921045912b766011f62e5, type: 3}
       propertyPath: m_RootOrder
@@ -57105,6 +57361,10 @@ PrefabInstance:
     - target: {fileID: 1017690965390557653, guid: cc61b356120b8544685d17cf9fac93e2, type: 3}
       propertyPath: m_TagString
       value: Fence
+      objectReference: {fileID: 0}
+    - target: {fileID: 1017690965390557653, guid: cc61b356120b8544685d17cf9fac93e2, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
       objectReference: {fileID: 0}
     - target: {fileID: 5167573494572992879, guid: cc61b356120b8544685d17cf9fac93e2, type: 3}
       propertyPath: m_RootOrder

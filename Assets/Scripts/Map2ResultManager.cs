@@ -130,17 +130,18 @@ public class Map2ResultManager : MonoBehaviour
         KillCountManager.isGameEnding = true;
         Time.timeScale = 0f;
 
-        int killBonus = currentKills * goldPerKill;
+        int killBonus   = currentKills * goldPerKill;
         int totalReward = stageClearReward + killBonus;
         KillCountManager.currentSessionGold += totalReward;
 
-        // UI 텍스트 연결 (맵 1 스타일)
-        if (surviveKillCountText != null) surviveKillCountText.text = currentKills.ToString();
-        if (surviveKillGoldText != null) surviveKillGoldText.text = $"+ {killBonus:N0}";
+        if (surviveKillCountText != null)      surviveKillCountText.text      = currentKills.ToString();
+        if (surviveKillGoldText != null)       surviveKillGoldText.text       = $"+ {killBonus:N0}";
         if (surviveStageClearGoldText != null) surviveStageClearGoldText.text = $"+ {stageClearReward:N0}";
-        if (surviveTotalRewardText != null) surviveTotalRewardText.text = $"+ {totalReward:N0}";
-        
-        if (currentHaveGoldText != null) currentHaveGoldText.text = KillCountManager.currentSessionGold.ToString("N0");
+        if (surviveTotalRewardText != null)    surviveTotalRewardText.text    = $"+ {totalReward:N0}";
+        if (currentHaveGoldText != null)       currentHaveGoldText.text       = KillCountManager.currentSessionGold.ToString("N0");
+
+        // ★ 다음 스테이지 해금 저장
+        StageProgressManager.Instance?.OnCurrentStageClear();
 
         ShowPanel(survivePanel);
     }

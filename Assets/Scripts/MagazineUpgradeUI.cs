@@ -42,7 +42,13 @@ public class MagazineUpgradeUI : MonoBehaviour
     
     private void OnEnable()
     {
+        KillCountManager.OnGoldChanged += RefreshUI; // 골드 변경 시 버튼 활성화 상태 자동 갱신
         RefreshUI();
+    }
+
+    private void OnDisable()
+    {
+        KillCountManager.OnGoldChanged -= RefreshUI;
     }
 
     // ─────────────────────────────────────────────────────────────────────

@@ -13,6 +13,10 @@ public class DistanceUI : MonoBehaviour
     [Tooltip("에임을 맞췄을 때 거리가 표시될 대상을 레이어로 지정하세요 (예: Animal 레이어)")]
     public LayerMask targetLayer;
 
+    // [최적화] 레이캐스트를 매 프레임이 아닌 0.05초(20fps) 간격으로만 실행
+    private float _rayTimer = 0f;
+    private const float RAY_INTERVAL = 0.05f;
+
     void Start()
     {
         if (mainCamera == null)
@@ -28,6 +32,11 @@ public class DistanceUI : MonoBehaviour
     void Update()
     {
         if (mainCamera == null || distanceText == null) return;
+
+        // [최적화] 0.05초 주기마다만 레이캐스트 실행
+        _rayTimer += Time.deltaTime;
+        if (_rayTimer < RAY_INTERVAL) return;
+        _rayTimer = 0f;
 
         // 화면 정중앙(에임) 위치에서 레이 생성
         Ray ray = mainCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));

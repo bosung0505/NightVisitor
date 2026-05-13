@@ -300,6 +300,45 @@ public class InventoryManager : MonoBehaviour
         Debug.LogWarning($"인벤토리의 [{newData.category}] 슬롯이 가득 찼습니다!");
     }
 
+    /// <summary>
+    /// 앱 재시작 시 PlayerPrefs에서 복원 — 이미 해당 아이템이 슬롯에 있으면 중복 추가하지 않습니다.
+    /// ShopItemUI.RestoreIfPurchased()에서 호출합니다.
+    /// </summary>
+    public void RestorePurchasedItem(ShopItemData data)
+    {
+        if (data == null) return;
+
+        // 이미 인벤토리에 이 아이템이 활성화된 슬롯으로 존재하면 건너뜁니다
+        InventoryItemUI[] slots = GetSlotsForCategory(data.category);
+        if (slots != null)
+        {
+            foreach (var slot in slots)
+            {
+                if (slot != null && slot.gameObject.activeSelf && slot.myItemData == data)
+                {
+                    Debug.Log($"[InventoryManager] 이미 복원된 아이템, 건너뜀: {data.itemName}");
+                    return;
+                }
+            }
+        }
+
+        // 없으면 일반 추가 (iconSize는 ShopItemData의 기본값 사용)
+        AddNewItem(data, data.iconSize);
+        Debug.Log($"[InventoryManager] 구매 아이템 복원 완료: {data.itemName}");
+    }
+
+    private InventoryItemUI[] GetSlotsForCategory(ItemCategory category)
+    {
+        switch (category)
+        {
+            case ItemCategory.Gun:       return gunSlots;
+            case ItemCategory.Scope:     return scopeSlots;
+            case ItemCategory.Mag:       return magSlots;
+            case ItemCategory.AggroAmmo: return aggroAmmoSlots;
+            default:                     return null;
+        }
+    }
+
     public void OpenItemInfo(ShopItemData itemData, InventoryItemUI itemUI)
     {
         if (itemData == null || itemUI == null) return;

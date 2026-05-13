@@ -68,8 +68,44 @@ public class KillCountManager : MonoBehaviour
     
     private int targetKills = 0; // 이번 스테이지의 목표 킬 수
 
-    // 글로벌 누적 골드 (앱을 끄면 날아가는 임시 저장소)
-    public static int currentSessionGold = 0;
+    // ── 글로벌 누적 골드 (PlayerPrefs 자동 저장, Lazy Load) ─────────────────────────────
+    // 첫 번째로 getter 또는 setter에 접근하는 시점에 PlayerPrefs를 자동으로 읽습니다.
+    // → Awake/OnEnable 실행 순서에 관계없이 항상 정확한 값을 반환합니다.
+    private static bool _dataLoaded = false;
+    private static int  _sessionGold = 0;
+
+    /// <summary>
+    /// 골드 값이 변경될 때마다 발생하는 이벤트.
+    /// 구독한 UI(ShopManager, MagazineUpgradeUI 등)가 자동으로 표시를 갱신합니다.
+    /// </summary>
+    public static event System.Action OnGoldChanged;
+
+    public static int currentSessionGold
+    {
+        get
+        {
+            if (!_dataLoaded) LoadData();
+            return _sessionGold;
+        }
+        set
+        {
+            if (!_dataLoaded) LoadData(); // 덮어쓰기 전에 로드 보장
+            _sessionGold = value;
+            PlayerPrefs.SetInt("PlayerGold", value);
+            PlayerPrefs.Save();
+            OnGoldChanged?.Invoke(); // ★ 구독한 모든 골드 UI에 변경 통보
+        }
+    }
+
+    /// <summary>
+    /// PlayerPrefs에서 골드를 읽어옵니다. 첫 번째 접근 시 자동 호출됩니다.
+    /// </summary>
+    private static void LoadData()
+    {
+        _dataLoaded  = true;
+        _sessionGold = PlayerPrefs.GetInt("PlayerGold", 0);
+        Debug.Log($"[KillCountManager] 골드 Lazy Load 완료 — 금액: {_sessionGold}");
+    }
 
     private bool isCleared = false; // 클리어 여부 플래그
     private Coroutine hideCoroutine; // 현재 진행중인 숨김 코루틴
@@ -85,9 +121,10 @@ public class KillCountManager : MonoBehaviour
 
     private void Awake()
     {
-        // 기존의 파괴(Destroy) 로직 삭제: 
-        // 맵 판널마다 각자의 KillCountManager를 안전하게 가질 수 있도록 합니다.
         Instance = this;
+
+        // Lazy Load가 아직 실행되지 않았다면 여기서 돈독해 실행합니다.
+        if (!_dataLoaded) LoadData();
     }
 
     private void OnEnable()
@@ -309,7 +346,10 @@ public class KillCountManager : MonoBehaviour
 
         isGameEnding = true;
         Time.timeScale = 0f;
-        CalculateAndShowResults(true); // 성공 (스테이지 보상 포함)
+        CalculateAndShowResults(true);
+
+        // ★ 다음 스테이지 해금 저장
+        StageProgressManager.Instance?.OnCurrentStageClear();
 
         if (UITransitionHelper.Instance != null)
         {

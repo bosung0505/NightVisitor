@@ -37,6 +37,7 @@ public class PopupDissolveTransition : MonoBehaviour
     public bool savePrefOnExecute;
 
     private bool isTransitioning = false;
+    private Coroutine autoCloseCoroutine = null;
 
     /// <summary>
     /// 버튼 OnClick에 연결할 열기 함수
@@ -141,5 +142,41 @@ public class PopupDissolveTransition : MonoBehaviour
         // 완전히 다 사라지면 비활성화
         if (popupRoot != null) popupRoot.SetActive(false);
         isTransitioning = false;
+    }
+
+    /// <summary>
+    /// 코드에서 직접 호출 — 팝업을 열고 displayDuration초 뒤 자동으로 닫습니다.
+    /// 
+    /// [중요] 이 스크립트가 붙은 오브젝트가 비활성화되어 있을 경우,
+    /// 항상 켜져있는 MonoBehaviour(예: ShopManager)를 externalRunner로 넘겨주세요.
+    /// 그러면 코루틴을 대신 실행해줍니다.
+    /// </summary>
+    public void ShowAndAutoClose(float displayDuration = 1f, MonoBehaviour externalRunner = null)
+    {
+        MonoBehaviour runner = (externalRunner != null) ? externalRunner : this;
+
+        if (autoCloseCoroutine != null)
+            runner.StopCoroutine(autoCloseCoroutine);
+
+        // runner를 AutoCloseRoutine 안까지 전달 — 내부 StartCoroutine도 모두 runner 기준으로 실행
+        autoCloseCoroutine = runner.StartCoroutine(AutoCloseRoutine(displayDuration, runner));
+    }
+
+    private IEnumerator AutoCloseRoutine(float displayDuration, MonoBehaviour runner)
+    {
+        // 이미 전환 중이면 끝날 때까지 대기
+        while (isTransitioning)
+            yield return null;
+
+        // 팝업 열기 — this(비활성)가 아닌 runner(항상 활성)로 StartCoroutine
+        yield return runner.StartCoroutine(OpenRoutine());
+
+        // 지정 시간 동안 표시 유지
+        yield return new WaitForSecondsRealtime(displayDuration);
+
+        // 팝업 닫기 — 마찬가지로 runner 기준
+        yield return runner.StartCoroutine(CloseRoutine());
+
+        autoCloseCoroutine = null;
     }
 }

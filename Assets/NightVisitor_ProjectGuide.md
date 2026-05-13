@@ -745,5 +745,82 @@ public enum MutantPhase { ToEntrance, ToInvasion, ChasePlayer, Crawling, AggroLu
 ---
 **[다음에 AI를 부르실 때 사용할 프롬프트 예시]**
 `Assets 폴더 최상단에 있는 NightVisitor_ProjectGuide.md 문서를 먼저 읽고 현재 프로젝트 진행 상황과 코드 구조를 파악해 줘!`
+
+---
+
+## 43. Android 빌드 성능 최적화 — 스크립트 GC 제거 및 렌더링 튜닝 (2026.05.13 ~ 05.14 추가)
+
+### 배경
+에디터에서도 끊김 현상이 존재했고, 모바일(Android) 빌드 시 더 심화될 것으로 판단하여 스크립트 레벨과 렌더링 레벨 두 축으로 최적화를 진행했습니다.
+
+---
+
+### 스크립트 최적화 (3가지 조치)
+
+#### 1. `CameraController.cs` — 입력 핸들러 내 Debug.Log 전면 제거
+- `HandleInputBegan`, `HandleInputMoved`, `SetCameraPoseAndLimits` 등 터치/드래그 입력 루프에 남아있던 모든 `Debug.Log` 제거
+- **효과**: 화면 드래그 시 매 프레임 발생하던 문자열 GC 할당 완전 제거
+
+#### 2. `RandomChickenAnimation.cs` + `RandomFoxAnimation.cs` — 정적 레지스트리 패턴 도입
+- `RandomChickenAnimation`에 `static List<RandomChickenAnimation> _all` 추가, `OnEnable`/`OnDisable`에서 자동 등록/해제
+- `RandomFoxAnimation`에서 `FindGameObjectsWithTag("Chicken")` 및 `FindObjectOfType<RandomChickenAnimation>()` 3곳을 `RandomChickenAnimation.All` 정적 리스트 참조로 전환
+- **효과**: 씬 전체 탐색(O(N) + GC 배열 할당) → O(1) 리스트 순회로 대체
+
+#### 3. `DistanceUI.cs` — Raycast 호출 주기 제한
+- `_rayTimer` + `RAY_INTERVAL = 0.05f` 추가, `Update()`에서 0.05초(20fps) 간격으로만 `Physics.Raycast` 실행
+- **효과**: 60fps 기준 레이캐스트 호출 횟수 약 66% 감소, 거리 표시 정확도는 무영향
+
+#### ⚠️ `RandomFoxAnimation.cs` 인코딩 손상 및 수복 이력
+- 수정 과정 중 파일의 혼합 인코딩 바이트가 깨져(`\ufffd`) `CheckForFenceJump()` 메서드 선언이 다른 메서드 내부에 삽입되는 구조적 컴파일 에러가 발생했습니다.
+- 직접 파일 편집 도구로 복구하고, 중복 삽입된 `jumpTriggerDistance`, `obstacleLayerMask`, `raycastHeightOffset` 필드 선언을 제거하여 정상화했습니다.
+- **교훈**: 한글 주석이 포함된 파일은 Python 우회 처리 시 인코딩이 깨질 수 있음. 앞으로 직접 파일 편집 도구만 사용합니다.
+
+---
+
+### 렌더링/씬 최적화 (에디터 작업)
+
+#### SetPass Calls 848 → 40 달성
+
+| 조치 항목 | 내용 |
+|----------|------|
+| **Terrain Draw Instanced 활성화** | `Terrain Inspector → 톱니바퀴 탭 → Tree & Detail Objects → ✅ Draw Instanced`. 나무/잔디를 하나씩 렌더링하던 방식에서 GPU 인스턴싱 일괄 처리로 전환. 가장 큰 효과. |
+| **Static Batching** | 움직이지 않는 환경 오브젝트(울타리, 건물, 바닥 등) `Inspector → Static → Batching Static` 체크. |
+| **GPU Instancing 충돌 해결** | Static Batching 켜진 오브젝트 머티리얼의 `Enable GPU Instancing` 체크 해제. 동시 활성 시 인스턴싱 무효화 + 경고 발생함. |
+
+#### GPU Instancing vs Static Batching 규칙
+- **Static Batching**: 고정 오브젝트 메시를 빌드 시 하나로 합침. 메모리 소모 있지만 CPU 절약이 훨씬 큼.
+- **GPU Instancing**: 같은 메시/머티리얼을 다수 렌더링 시 하나의 명령으로 묶음.
+- 두 방식은 **함께 사용 불가**. Static Batching 오브젝트는 GPU Instancing을 꺼야 함.
+- Terrain 나무/풀은 Terrain이 직접 관리하므로 충돌 없이 `Draw Instanced` 사용 가능.
+
+#### 텍스처 Android 압축 설정 (진행 예정)
+- 텍스처 선택 → Inspector → Android 탭 → **Override for Android** ✅ → Format: **ASTC** → Apply
+- 알파 채널 있는 텍스처: ASTC 4x4 또는 6x6 (투명도 보존)
+- 알파 없는 텍스처: ASTC 8x8 (강한 압축, 용량↓)
+- UI 텍스처는 압축 아티팩트 발생 가능 → 적용 후 육안 확인 필수
+
+#### 최종 Stats 수치 (에디터 인게임 기준)
+
+| 항목 | 수치 | 평가 |
+|------|------|------|
+| SetPass calls | **40** | ✅ 우수 (모바일 목표 100 이하 달성) |
+| FPS | **83.3** | ✅ 양호 (에디터 기준, 실기기는 더 빠름) |
+| Batches | **295** | 🟡 추가 Static Batching 적용 여지 있음 |
+| Saved by batching | **12** | 🟡 낮음 — 배칭 최적화 추가 가능 |
+| Tris / Verts | **691k / 1.1M** | 🔴 모바일 권장치(300k) 초과, 향후 LOD 검토 필요 |
+
+---
+
+### 향후 과제 (미완료)
+- Batches 추가 감소: 환경 오브젝트 Batching Static 추가 적용
+- Tris/Verts 감소: 터레인 나무/풀 밀도 조정, 캐릭터 LOD 설정
+- 텍스처 ASTC 압축 일괄 적용 및 품질 확인
+- Build Settings: Scripting Backend → **IL2CPP**, Target Architecture → **ARM64** 설정 확인
+- Android 실기기 빌드 후 Unity Profiler로 GC.Alloc 잔존 여부 최종 확인
+
+---
+**[다음에 AI를 부르실 때 사용할 프롬프트 예시]**
+`Assets 폴더 최상단에 있는 NightVisitor_ProjectGuide.md 문서를 먼저 읽고 현재 프로젝트 진행 상황과 코드 구조를 파악해 줘!`
+
  
  

@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class RandomChickenAnimation : MonoBehaviour
 {
@@ -51,9 +52,17 @@ public class RandomChickenAnimation : MonoBehaviour
     private Coroutine behaviorRoutine;
     private Coroutine flapSoundRoutine;
 
+    // [최적화] 씬 내 활성 닭 정적 레지스트리 — FindGameObjectsWithTag("Chicken") 대체
+    // OnEnable/OnDisable에서 자동 등록/해제되므로 항상 살아있는 닭만 포함됩니다.
+    private static readonly List<RandomChickenAnimation> _all = new List<RandomChickenAnimation>();
+    public  static IReadOnlyList<RandomChickenAnimation> All => _all;
+
     // [최적화] SphereCast 타이머: 매 프레임이 아닌 0.1초 간격으로만 검사
     private float obstacleCheckTimer = 0f;
     private const float OBSTACLE_CHECK_INTERVAL = 0.1f;
+
+    private void OnEnable()  { if (!_all.Contains(this)) _all.Add(this); }
+    private void OnDisable() { _all.Remove(this); }
 
     void Start()
     {

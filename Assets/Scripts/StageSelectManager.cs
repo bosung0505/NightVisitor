@@ -142,7 +142,7 @@ public class StageSelectManager : MonoBehaviour
             {
                 StageConfig capturedConfig = config;
                 bool isFinal = (i == stageConfigs.Length - 1);
-                int stageNum = i + 1; // 1-based index
+                int stageNum = i + 1;
                 config.playButton.onClick.AddListener(() => OnPlayStageClicked(capturedConfig, isFinal, stageNum));
             }
         }
@@ -154,9 +154,21 @@ public class StageSelectManager : MonoBehaviour
             if (config.playButton != null)
             {
                 StageConfig2 capturedConfig = config;
-                int stageNum = i + 1; // 1-based index
+                int stageNum = i + 1;
                 config.playButton.onClick.AddListener(() => OnPlayStage2Clicked(capturedConfig, stageNum));
             }
+        }
+
+        // ★ StageProgressManager에 버튼 배열 등록 → 잠금/해제 색상 초기 적용
+        if (StageProgressManager.Instance != null)
+        {
+            Button[] map1Btns = new Button[stageConfigs.Length];
+            for (int i = 0; i < stageConfigs.Length; i++) map1Btns[i] = stageConfigs[i].playButton;
+
+            Button[] map2Btns = new Button[stageConfigs2.Length];
+            for (int i = 0; i < stageConfigs2.Length; i++) map2Btns[i] = stageConfigs2[i].playButton;
+
+            StageProgressManager.Instance.RegisterStages(map1Btns, map2Btns);
         }
 
         if (inGamePanel != null)
@@ -181,8 +193,11 @@ public class StageSelectManager : MonoBehaviour
     // Map 1 실행용
     public void OnPlayStageClicked(StageConfig config, bool isFinalStage = false, int stageNum = 1)
     {
-        lastActiveStagePanel = mapStagePanel; // Map 1 패널 기억
-        
+        lastActiveStagePanel = mapStagePanel;
+
+        // ★ 현재 스테이지 기록 (클리어 시 다음 스테이지 해금에 사용)
+        StageProgressManager.Instance?.SetCurrentStage(1, stageNum);
+
         // 최고 도달 스테이지 갱신 (Map 1)
         if (PlayerStatsManager.Instance != null)
         {
@@ -203,8 +218,11 @@ public class StageSelectManager : MonoBehaviour
     // Map 2 실행용
     public void OnPlayStage2Clicked(StageConfig2 config, int stageNum = 1)
     {
-        lastActiveStagePanel = mapStagePanel2; // Map 2 패널 기억
-        
+        lastActiveStagePanel = mapStagePanel2;
+
+        // ★ 현재 스테이지 기록
+        StageProgressManager.Instance?.SetCurrentStage(2, stageNum);
+
         // 최고 도달 스테이지 갱신 (Map 2)
         if (PlayerStatsManager.Instance != null)
         {

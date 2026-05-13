@@ -56,9 +56,13 @@ public class RandomFoxAnimation : MonoBehaviour
     private Vector3 escapeDestination;
     private bool isJumpMoving = false;
 
-    // [최적화] Walk/Sneak 목적지 갱신 타이머 (매 프레임 SetDestination 방지)
+    // [최적화] Walk/Sneak 목적지 갱신 타이머 (0.2초 간격)
     private float destUpdateTimer = 0f;
     private const float DEST_UPDATE_INTERVAL = 0.2f;
+
+    // [최적화] FindClosestChicken 추력 타이머 (0.5초 간격으로 제한)
+    private float _findChickenTimer = 0f;
+    private const float FIND_CHICKEN_INTERVAL = 0.5f;
 
     void Awake()
     {
@@ -194,22 +198,11 @@ public class RandomFoxAnimation : MonoBehaviour
         {
             case FoxState.Walk:
                 agent.speed = walkSpeed;
-                // [최적화] Walk/Sneak은 0.2초 간격으로만 SetDestination 갱신 (HuntingZone는 고정 목표)
                 destUpdateTimer += Time.deltaTime;
                 if (destUpdateTimer >= DEST_UPDATE_INTERVAL)
                 {
                     destUpdateTimer = 0f;
                     agent.SetDestination(GetDestinationDefault());
-                }
-
-                // 1초마다 상태 로깅 (스팸 방지)
-                if (Time.frameCount % 60 == 0)
-                {
-                    string targetName = huntingZoneCenter != null ? huntingZoneCenter.name : "NULL (타겟없음)";
-                    Vector3 targetPos = huntingZoneCenter != null ? huntingZoneCenter.position : transform.position;
-                    bool destSuccess = agent.hasPath || agent.pathPending;
-                    
-                    Debug.Log($"[Fox Status] 타겟이름: {targetName}, 타겟좌표: {targetPos}, 내비도착목표(Dest): {agent.destination}, 속도: {agent.velocity.magnitude}, isOnNavMesh: {agent.isOnNavMesh}, hasPath: {destSuccess}");
                 }
                 break;
                 
@@ -225,15 +218,11 @@ public class RandomFoxAnimation : MonoBehaviour
                 
             case FoxState.Run:
                 agent.speed = runSpeed;
-                
-                // Track entry direction to use later for escaping
                 entryDirection = transform.forward;
 
                 if (targetChicken != null)
                 {
                     agent.SetDestination(targetChicken.position);
-                    
-                    // Check for catch
                     float dist = Vector3.Distance(transform.position, targetChicken.position);
                     if (dist <= catchDistance)
                     {
@@ -243,8 +232,13 @@ public class RandomFoxAnimation : MonoBehaviour
                 }
                 else
                 {
-                    // Lost chicken, find another or go to center
-                    FindClosestChicken();
+                    // [최적화] 0.5초 간격으로 FindClosestChicken 호출 제한
+                    _findChickenTimer += Time.deltaTime;
+                    if (_findChickenTimer >= FIND_CHICKEN_INTERVAL)
+                    {
+                        _findChickenTimer = 0f;
+                        FindClosestChicken();
+                    }
                     if (targetChicken == null) agent.SetDestination(GetDestinationDefault());
                 }
                 break;
@@ -270,15 +264,12 @@ public class RandomFoxAnimation : MonoBehaviour
             // 현재 목적지에 거의 다다랐다면(갈 수 있는 내비메시 끝에 도달했다면)
             if (!agent.pathPending && agent.remainingDistance <= 1.0f)
             {
-                // 닭장에서 더 멀어지는 바깥쪽 방향을 계산합니다.
-                Vector3 awayFromCenterDir = transform.forward; // 기본값은 그냥 앞으로
+                Vector3 awayFromCenterDir = transform.forward;
                 if (huntingZoneCenter != null)
                 {
                     awayFromCenterDir = (transform.position - huntingZoneCenter.position).normalized;
                     awayFromCenterDir.y = 0;
                 }
-                
-                // 새로운 벽 타기(슬라이딩) 로직을 적용한 목적지 갱신
                 escapeDestination = GetSlidingEscapeDestination(transform.position, awayFromCenterDir.normalized, 20f);
                 agent.SetDestination(escapeDestination);
             }
@@ -288,37 +279,30 @@ public class RandomFoxAnimation : MonoBehaviour
 
     private void CheckForFenceJump()
     {
-        // Use Vector3.up for world vertical offset, ignoring local tilt of the fox model
         Vector3 rayOrigin = transform.position + (Vector3.up * raycastHeightOffset);
         float sphereRadius = 0.3f;
-        
+
         Debug.DrawRay(rayOrigin, transform.forward * jumpTriggerDistance, Color.red);
-        
-        // Default to everything if user hasn't set it 
+
         int mask = obstacleLayerMask.value == 0 ? ~0 : obstacleLayerMask.value;
-        
+
         RaycastHit hit;
         if (Physics.SphereCast(rayOrigin, sphereRadius, transform.forward, out hit, jumpTriggerDistance, mask))
         {
-            // [최적화] string.ToLower() + Contains 제거 → CompareTag만 사용 (GC 0)
-            if (hit.collider.CompareTag("Fence")) 
+            // [Opt] CompareTag only (zero GC)
+            if (hit.collider.CompareTag("Fence"))
             {
-                // [수정점] 여우가 현재 가고자 하는 방향(agent.desiredVelocity)과 
-                // 시선의 방향(transform.forward) 사이의 각도를 계산합니다.
-                // 닭을 물고 빙글빙글 돌 때는 시선과 이동 목적지가 심하게 어긋나므로 
-                // 이 각도가 너무 크면(예: 45도 이상) 옆에 있는 울타리라고 판단하고 점프를 무시합니다.
-                
                 Vector3 desiredDir = agent.desiredVelocity.normalized;
                 float angleToDestination = Vector3.Angle(transform.forward, desiredDir);
-                
-                // 에이전트가 내비메시를 따라 정상적으로 움직이고 있는데, 시선과 이동 방향이 다르면(예: 회전 중) 무시
+
+                // Skip if agent velocity and gaze are misaligned (e.g. turning)
                 if (agent.velocity.magnitude > 0.1f && angleToDestination > 30f)
                 {
                     Debug.Log($"Ignored Fence Jump. Angle too steep: {angleToDestination}");
                     return;
                 }
 
-                // 점프 쿨타임 체크 (무한 루프 방지 핵심)
+                // Jump cooldown check
                 if (Time.time - lastJumpTime < jumpCooldown)
                 {
                     Debug.Log($"Ignored Fence Jump. On Cooldown. ({Time.time - lastJumpTime:F1}s / {jumpCooldown}s)");
@@ -326,9 +310,8 @@ public class RandomFoxAnimation : MonoBehaviour
                 }
 
                 Debug.Log("Fence Detected and Path Aligned! Jumping. Hit: " + hit.collider.gameObject.name);
-                lastJumpTime = Time.time; // 점프 시간 기록
-                
-                // We are close to the fence. Transition to jump based on current state.
+                lastJumpTime = Time.time;
+
                 if (currentState == FoxState.Run)
                 {
                     StartCoroutine(JumpRoutine());
@@ -474,7 +457,9 @@ public class RandomFoxAnimation : MonoBehaviour
         }
 
         // 2. 오브젝트 이름으로 찾기 실패 시, 맵에 존재하는 닭 중 아무나 한 마리 찾아서 그쪽으로 향함
-        RandomChickenAnimation anyChicken = FindObjectOfType<RandomChickenAnimation>();
+        // [Opt] Static registry replaces FindObjectOfType
+        RandomChickenAnimation anyChicken = RandomChickenAnimation.All.Count > 0
+            ? RandomChickenAnimation.All[0] : null;
         if (anyChicken != null)
         {
             // 닭이 배회하는 구역의 중심(boundaryCenter)이 있다면 그걸 타겟으로 삼음
@@ -536,15 +521,9 @@ public class RandomFoxAnimation : MonoBehaviour
                 // Panic all chickens when Fox starts running to hunt
                 if (newState == FoxState.Run)
                 {
-                    GameObject[] chickens = GameObject.FindGameObjectsWithTag("Chicken");
-                    foreach (GameObject chicken in chickens)
-                    {
-                        RandomChickenAnimation anim = chicken.GetComponent<RandomChickenAnimation>();
-                        if (anim != null)
-                        {
-                            anim.Panic(5f); // Duration of panic
-                        }
-                    }
+                    // [Opt] Static registry replaces FindGameObjectsWithTag (zero GC)
+                    foreach (RandomChickenAnimation anim in RandomChickenAnimation.All)
+                        anim.Panic(5f);
                 }
                 break;
             case FoxState.Jump:
@@ -622,11 +601,11 @@ public class RandomFoxAnimation : MonoBehaviour
 
     private void FindClosestChicken()
     {
-        GameObject[] chickens = GameObject.FindGameObjectsWithTag("Chicken");
+        // [Opt] Static registry replaces FindGameObjectsWithTag (zero GC)
         float closestDistance = Mathf.Infinity;
         Transform closestChicken = null;
 
-        foreach (GameObject chicken in chickens)
+        foreach (RandomChickenAnimation chicken in RandomChickenAnimation.All)
         {
             float distance = Vector3.Distance(transform.position, chicken.transform.position);
             if (distance < closestDistance)
